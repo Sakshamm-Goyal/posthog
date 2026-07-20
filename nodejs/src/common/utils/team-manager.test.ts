@@ -225,6 +225,18 @@ describe('TeamManager()', () => {
             expect(newTeam).not.toBeNull()
             expect(newTeam!.minimal_flag_called_events).toBe(true)
         })
+
+        it('does not leak minimal_flag_called_events across teams', async () => {
+            const teamA = await createTeam(postgres, organizationId)
+            const teamB = await createTeam(postgres, organizationId)
+            await insertRow(postgres, 'feature_flags_teamfeatureflagsconfig', {
+                team_id: teamA,
+                minimal_flag_called_events: true,
+            })
+
+            expect((await teamManager.getTeam(teamA))!.minimal_flag_called_events).toBe(true)
+            expect((await teamManager.getTeam(teamB))!.minimal_flag_called_events).toBe(false)
+        })
     })
 
     describe('hasAvailableFeature()', () => {
