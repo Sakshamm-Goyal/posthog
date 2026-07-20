@@ -1,6 +1,6 @@
 import { useValues } from 'kea'
 
-import { LemonCollapse, LemonTable, LemonTag, LemonTagType, Link, Tooltip } from '@posthog/lemon-ui'
+import { LemonBanner, LemonTable, LemonTag, LemonTagType, Link, Tooltip } from '@posthog/lemon-ui'
 
 import { TZLabel } from 'lib/components/TZLabel'
 import { humanFriendlyNumber } from 'lib/utils/numbers'
@@ -41,37 +41,28 @@ const STATE_CONFIG: Record<EmailReputationStateEnumApi, { label: string; type: L
     },
 }
 
-function ReputationLegend(): JSX.Element {
-    return (
-        <LemonCollapse
-            panels={[
-                {
-                    key: 'legend',
-                    header: 'How scores are calculated',
-                    content: (
-                        <>
-                            <p className="text-secondary text-sm mb-3">
-                                Scores are recalculated daily from email bounces and spam complaints. Each score covers
-                                the most recent sending: at least the last 24 hours and at least the last 1,000 emails,
-                                whichever is more. The project score pools all workflow email together, including from
-                                workflows that were since disabled or deleted.
-                            </p>
-                            <div className="space-y-2">
-                                {Object.entries(STATE_CONFIG).map(([state, config]) => (
-                                    <div key={state} className="flex items-start gap-2">
-                                        <LemonTag type={config.type} className="shrink-0">
-                                            {config.label}
-                                        </LemonTag>
-                                        <span className="text-sm text-secondary">{config.tooltip}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </>
-                    ),
-                },
-            ]}
-        />
-    )
+// Must match the evaluator's default thresholds
+// (nodejs/src/cdp/services/email-reputation/classifier.ts DEFAULT_THRESHOLDS).
+const THRESHOLDS = {
+    bounceWarning: 0.02,
+    bounceCritical: 0.05,
+    complaintWarning: 0.001,
+    complaintCritical: 0.005,
+}
+
+/** Names the exact threshold the project crossed; complaint wins when both breach (mirrors the classifier). */
+function breachDescription(reputation: EmailReputationSnapshotApi): string | null {
+    if (reputation.state === 'critical') {
+        return reputation.complaint_rate >= THRESHOLDS.complaintCritical
+            ? `The spam complaint rate (${formatRate(reputation.complaint_rate)}) is at or above the ${formatRate(THRESHOLDS.complaintCritical)} critical threshold.`
+            : `The bounce rate (${formatRate(reputation.bounce_rate)}) is at or above the ${formatRate(THRESHOLDS.bounceCritical)} critical threshold.`
+    }
+    if (reputation.state === 'warning') {
+        return reputation.complaint_rate >= THRESHOLDS.complaintWarning
+            ? `The spam complaint rate (${formatRate(reputation.complaint_rate)}) is at or above the ${formatRate(THRESHOLDS.complaintWarning)} warning threshold.`
+            : `The bounce rate (${formatRate(reputation.bounce_rate)}) is at or above the ${formatRate(THRESHOLDS.bounceWarning)} warning threshold.`
+    }
+    return null
 }
 
 function StateTag({ state }: { state: EmailReputationStateEnumApi }): JSX.Element {
@@ -120,9 +111,17 @@ function TeamReputationCard({ reputation }: { reputation: EmailReputationSnapsho
 
 export function WorkflowsReputation(): JSX.Element {
     const { teamReputation, workflowSnapshots, reputationResponseLoading } = useValues(workflowsReputationLogic)
+    const breach = teamReputation ? breachDescription(teamReputation) : null
 
     return (
         <div className="space-y-4" data-attr="workflows-reputation">
+            {teamReputation && breach && (
+                <LemonBanner type={teamReputation.state === 'critical' ? 'error' : 'warning'}>
+                    <b>This project's email reputation needs attention.</b> {breach} Scores cover your most recent
+                    sending: at least the last 24 hours and at least the last 1,000 emails. Review your recipient list
+                    to protect deliverability.
+                </LemonBanner>
+            )}
             {teamReputation ? (
                 <TeamReputationCard reputation={teamReputation} />
             ) : (
@@ -184,7 +183,6 @@ export function WorkflowsReputation(): JSX.Element {
                     },
                 ]}
             />
-            <ReputationLegend />
         </div>
     )
 }
