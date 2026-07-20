@@ -290,6 +290,7 @@
           ExternalDataSourceType.FAUNA: FaunaSourceConfig,
           ExternalDataSourceType.FEATUREBASE: FeaturebaseSourceConfig,
           ExternalDataSourceType.FEISHU: FeishuSourceConfig,
+          ExternalDataSourceType.FILEUPLOAD: FileUploadSourceConfig,
           ExternalDataSourceType.FILLOUT: FilloutSourceConfig,
           ExternalDataSourceType.FINAGE: FinageSourceConfig,
           ExternalDataSourceType.FINANCIALMODELLING: FinancialModellingSourceConfig,
