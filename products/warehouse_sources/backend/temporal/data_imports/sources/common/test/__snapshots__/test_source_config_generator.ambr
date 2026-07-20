@@ -853,6 +853,7 @@
           ExternalDataSourceType.VESPA: VespaSourceConfig,
           ExternalDataSourceType.VISMAECONOMIC: VismaEconomicSourceConfig,
           ExternalDataSourceType.VITALLY: VitallySourceConfig,
+          ExternalDataSourceType.VTURB: VturbSourceConfig,
           ExternalDataSourceType.VULTR: VultrSourceConfig,
           ExternalDataSourceType.WAITERAID: WaiteraidSourceConfig,
           ExternalDataSourceType.WASABI: WasabiSourceConfig,
