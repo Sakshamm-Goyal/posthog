@@ -19,20 +19,17 @@ export const MODE_OPTIONS: ComposerModeOption[] = [
     {
         value: InitialPermissionModeEnumApi.Auto,
         label: 'Auto',
-        description:
-            'Accepts file edits and shell commands automatically. Asks before PostHog tools that change or publish live data.',
+        description: 'Edits and commands run freely. Asks before changing live PostHog data.',
     },
     {
         value: InitialPermissionModeEnumApi.BypassPermissions,
         label: 'Full auto',
-        description:
-            'Bypasses all permissions. Safe in the sandbox, but the agent can modify or delete data without asking.',
+        description: 'Never asks. The agent can change or delete live data on its own.',
     },
     {
         value: InitialPermissionModeEnumApi.Plan,
         label: 'Plan',
-        description:
-            'Recommended for complex work such as research or implementation. Create a plan now, then execute it later.',
+        description: 'Plans the work first. Nothing runs until you approve the plan.',
     },
 ]
 
