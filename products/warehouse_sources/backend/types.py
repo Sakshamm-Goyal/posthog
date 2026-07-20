@@ -906,6 +906,7 @@ class ExternalDataSourceType(models.TextChoices):
     PLIVO = "Plivo", "Plivo"
     DATAFORSEO = "DataForSEO", "DataForSEO"
     SLEEKPLAN = "Sleekplan", "Sleekplan"
+    VTURB = "Vturb", "Vturb"
 
 
 # Maps a source type to the direct-SQL engine that can query it live. A source type is only

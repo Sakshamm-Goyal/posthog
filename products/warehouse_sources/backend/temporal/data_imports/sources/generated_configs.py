@@ -4690,6 +4690,11 @@ class VitallySourceConfig(config.Config):
 
 
 @config.config
+class VturbSourceConfig(config.Config):
+    pass
+
+
+@config.config
 class VultrSourceConfig(config.Config):
     api_key: str
 
@@ -5802,6 +5807,7 @@ def get_config_for_source(source: ExternalDataSourceType):
         ExternalDataSourceType.VESPA: VespaSourceConfig,
         ExternalDataSourceType.VISMAECONOMIC: VismaEconomicSourceConfig,
         ExternalDataSourceType.VITALLY: VitallySourceConfig,
+        ExternalDataSourceType.VTURB: VturbSourceConfig,
         ExternalDataSourceType.VULTR: VultrSourceConfig,
         ExternalDataSourceType.WAITERAID: WaiteraidSourceConfig,
         ExternalDataSourceType.WASABI: WasabiSourceConfig,

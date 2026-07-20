@@ -981,6 +981,7 @@ doesn't conflict with concurrent PRs.
 - veeqo
 - vespa
 - visma_economic
+- vturb
 - vwo
 - waiteraid
 - wasabi

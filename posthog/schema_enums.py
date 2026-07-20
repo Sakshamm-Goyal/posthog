@@ -2048,6 +2048,7 @@ class ExternalDataSourceType(StrEnum):
     PLIVO = "Plivo"
     DATA_FOR_SEO = "DataForSEO"
     SLEEKPLAN = "Sleekplan"
+    VTURB = "Vturb"
 
 
 class ExternalQueryErrorCode(StrEnum):
