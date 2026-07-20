@@ -14,23 +14,54 @@ import type {
 
 import { workflowsReputationLogic } from './workflowsReputationLogic'
 
+// Descriptions must match the evaluator's default thresholds
+// (nodejs/src/cdp/services/email-reputation/classifier.ts DEFAULT_THRESHOLDS).
 const STATE_CONFIG: Record<EmailReputationStateEnumApi, { label: string; type: LemonTagType; tooltip: string }> = {
-    insufficient_data: {
-        label: 'Not enough data',
-        type: 'muted',
-        tooltip: 'Too few emails were sent in the window to judge the rates reliably.',
+    healthy: {
+        label: 'Healthy',
+        type: 'success',
+        tooltip: 'Bounce rate below 2% and spam complaint rate below 0.1%.',
     },
-    healthy: { label: 'Healthy', type: 'success', tooltip: 'Bounce and complaint rates are below all thresholds.' },
     warning: {
         label: 'Warning',
         type: 'warning',
-        tooltip: 'The bounce or spam complaint rate is above the warning threshold.',
+        tooltip:
+            'Bounce rate at or above 2%, or spam complaint rate at or above 0.1%. Review your recipient list before rates climb further.',
     },
     critical: {
         label: 'Critical',
         type: 'danger',
-        tooltip: 'The bounce or spam complaint rate is above the critical threshold.',
+        tooltip:
+            'Bounce rate at or above 5%, or spam complaint rate at or above 0.5%. Sending at these rates puts email deliverability at risk.',
     },
+    insufficient_data: {
+        label: 'Not enough data',
+        type: 'muted',
+        tooltip: 'Fewer than 100 emails in the evaluated window, which is too few to judge reliably.',
+    },
+}
+
+function ReputationLegend(): JSX.Element {
+    return (
+        <div className="border rounded p-4 bg-surface-primary">
+            <h4 className="mb-1">How scores are calculated</h4>
+            <p className="text-secondary text-sm mb-3">
+                Scores are recalculated daily from email bounces and spam complaints. Each score covers the most recent
+                sending: at least the last 24 hours and at least the last 1,000 emails, whichever is more. The project
+                score pools all workflow email together, including from workflows that were since disabled or deleted.
+            </p>
+            <div className="space-y-2">
+                {Object.entries(STATE_CONFIG).map(([state, config]) => (
+                    <div key={state} className="flex items-start gap-2">
+                        <LemonTag type={config.type} className="shrink-0">
+                            {config.label}
+                        </LemonTag>
+                        <span className="text-sm text-secondary">{config.tooltip}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
 }
 
 function StateTag({ state }: { state: EmailReputationStateEnumApi }): JSX.Element {
@@ -143,6 +174,7 @@ export function WorkflowsReputation(): JSX.Element {
                     },
                 ]}
             />
+            <ReputationLegend />
         </div>
     )
 }
