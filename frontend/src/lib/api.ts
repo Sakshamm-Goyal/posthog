@@ -3001,11 +3001,15 @@ const api = {
                 serviceNames?: string[]
                 filterGroup?: PropertyGroupFilter
                 compareFilter?: { compare?: boolean; compare_to?: string | null }
+                limit?: number
+                offset?: number
             },
             signal?: AbortSignal
         ): Promise<{
             results: AggregatedSpanRow[]
             compare?: AggregatedSpanRow[] | null
+            has_more?: boolean
+            next_offset?: number | null
         }> {
             return new ApiRequest().tracingSpans().withAction('aggregate').create({ signal, data: { query } })
         },
