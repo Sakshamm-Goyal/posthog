@@ -174,6 +174,19 @@ export type CdpConfig = ClickhouseConfig & {
     CYCLOTRON_NODE_RESCHEDULE_CHUNK_SIZE: number
     CYCLOTRON_NODE_RESCHEDULE_MAX_CHUNKS_PER_CALL: number
     CYCLOTRON_NODE_RESCHEDULE_CHUNK_SLEEP_MS: number
+
+    // Email reputation evaluator (daily Temporal-scheduled bounce/complaint snapshots for workflows email)
+    EMAIL_REPUTATION_EVALUATION_HOUR_UTC: number
+    EMAIL_REPUTATION_TARGET_VOLUME: number
+    EMAIL_REPUTATION_MIN_WINDOW_HOURS: number
+    EMAIL_REPUTATION_LOOKBACK_DAYS: number
+    EMAIL_REPUTATION_MIN_SENDS: number
+    EMAIL_REPUTATION_BOUNCE_WARNING_RATE: number
+    EMAIL_REPUTATION_BOUNCE_CRITICAL_RATE: number
+    EMAIL_REPUTATION_COMPLAINT_WARNING_RATE: number
+    EMAIL_REPUTATION_COMPLAINT_CRITICAL_RATE: number
+    EMAIL_REPUTATION_BATCH_SIZE: number
+    EMAIL_REPUTATION_BATCH_DELAY_SECONDS: number
 }
 
 export function getDefaultCdpConfig(): CdpConfig {
@@ -329,5 +342,21 @@ export function getDefaultCdpConfig(): CdpConfig {
         CYCLOTRON_NODE_RESCHEDULE_CHUNK_SIZE: 5000,
         CYCLOTRON_NODE_RESCHEDULE_MAX_CHUNKS_PER_CALL: 20,
         CYCLOTRON_NODE_RESCHEDULE_CHUNK_SLEEP_MS: 100,
+
+        // Thresholds sit ahead of AWS SES's review lines (5% bounce / 0.1% complaint at ~0.5%
+        // escalation). Rates are computed SES-style over a window spanning at least
+        // MIN_WINDOW_HOURS and at least TARGET_VOLUME sends — whichever reaches further back
+        // (capped at LOOKBACK_DAYS). Calculation only for now — enforcement ships separately.
+        EMAIL_REPUTATION_EVALUATION_HOUR_UTC: 6,
+        EMAIL_REPUTATION_TARGET_VOLUME: 1000,
+        EMAIL_REPUTATION_MIN_WINDOW_HOURS: 24,
+        EMAIL_REPUTATION_LOOKBACK_DAYS: 30,
+        EMAIL_REPUTATION_MIN_SENDS: 100,
+        EMAIL_REPUTATION_BOUNCE_WARNING_RATE: 0.02,
+        EMAIL_REPUTATION_BOUNCE_CRITICAL_RATE: 0.05,
+        EMAIL_REPUTATION_COMPLAINT_WARNING_RATE: 0.001,
+        EMAIL_REPUTATION_COMPLAINT_CRITICAL_RATE: 0.005,
+        EMAIL_REPUTATION_BATCH_SIZE: 50,
+        EMAIL_REPUTATION_BATCH_DELAY_SECONDS: 30,
     }
 }
