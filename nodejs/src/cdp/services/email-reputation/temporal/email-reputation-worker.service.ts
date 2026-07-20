@@ -3,6 +3,7 @@ import { Client, Connection, ScheduleAlreadyRunning, ScheduleOverlapPolicy } fro
 import { DataConverter } from '@temporalio/common'
 import { NativeConnection, Worker } from '@temporalio/worker'
 import * as fs from 'fs/promises'
+import https from 'https'
 
 import { EncryptionCodec } from '~/common/temporal/codec'
 import { PostgresRouter } from '~/common/utils/db/postgres'
@@ -73,6 +74,8 @@ export class EmailReputationWorkerService {
     }
 
     private buildReputationService(): EmailReputationService {
+        // Internal ClickHouse uses self-signed certs with a hostname mismatch, same as the
+        // cdp-rerun-worker and session-replay recording-api clients.
         const chScheme = this.config.CLICKHOUSE_SECURE ? 'https' : 'http'
         const chPort = this.config.CLICKHOUSE_SECURE ? 8443 : 8123
         const clickhouse = createClickHouseClient({
@@ -80,6 +83,13 @@ export class EmailReputationWorkerService {
             username: this.config.CLICKHOUSE_USER,
             password: this.config.CLICKHOUSE_PASSWORD || undefined,
             database: this.config.CLICKHOUSE_DATABASE,
+            request_timeout: 60_000,
+            max_open_connections: 10,
+            ...(this.config.CLICKHOUSE_SECURE
+                ? {
+                      http_agent: new https.Agent({ rejectUnauthorized: false, keepAlive: true, maxSockets: 10 }), // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification
+                  }
+                : {}),
         })
         return new EmailReputationService(clickhouse, this.deps.postgres, {
             targetVolume: this.config.EMAIL_REPUTATION_TARGET_VOLUME,
