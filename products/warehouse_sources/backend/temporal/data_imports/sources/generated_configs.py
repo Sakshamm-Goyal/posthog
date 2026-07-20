@@ -1286,11 +1286,6 @@ class DeepsourceSourceConfig(config.Config):
 
 
 @config.config
-class DelightedSourceConfig(config.Config):
-    api_key: str
-
-
-@config.config
 class DenoDeploySourceConfig(config.Config):
     access_token: str
 
@@ -5186,7 +5181,6 @@ def get_config_for_source(source: ExternalDataSourceType):
         ExternalDataSourceType.DEEL: DeelSourceConfig,
         ExternalDataSourceType.DEEPGRAM: DeepgramSourceConfig,
         ExternalDataSourceType.DEEPSOURCE: DeepsourceSourceConfig,
-        ExternalDataSourceType.DELIGHTED: DelightedSourceConfig,
         ExternalDataSourceType.DENODEPLOY: DenoDeploySourceConfig,
         ExternalDataSourceType.DEPUTY: DeputySourceConfig,
         ExternalDataSourceType.DEVINAI: DevinAISourceConfig,

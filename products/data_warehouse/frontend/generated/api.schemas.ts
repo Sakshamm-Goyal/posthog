@@ -1420,7 +1420,6 @@ export interface CredentialApi {
  * * `Dixa` - Dixa
  * * `Gladly` - Gladly
  * * `Qualtrics` - Qualtrics
- * * `Delighted` - Delighted
  * * `AzureDevOps` - AzureDevOps
  * * `Rollbar` - Rollbar
  * * `Opsgenie` - Opsgenie
@@ -2289,7 +2288,6 @@ export const ExternalDataSourceTypeEnumApi = {
     Dixa: 'Dixa',
     Gladly: 'Gladly',
     Qualtrics: 'Qualtrics',
-    Delighted: 'Delighted',
     AzureDevOps: 'AzureDevOps',
     Rollbar: 'Rollbar',
     Opsgenie: 'Opsgenie',
