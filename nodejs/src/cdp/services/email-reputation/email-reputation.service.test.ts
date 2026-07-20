@@ -211,6 +211,29 @@ describe('EmailReputationService', () => {
         expect(teamRow).toMatchObject({ state: 'critical', emails_sent: '1100' })
     })
 
+    it('pools the tenant rate across workflows instead of averaging or escalating per-workflow states', async () => {
+        const bigFlow = await insertEmailFlow()
+        const toxicFlow = await insertEmailFlow()
+        mockMetrics([
+            { teamId, appSourceId: bigFlow.id, hourBucket: HOURS_AGO(4), sent: 50000, bounced: 150, complained: 0 },
+            { teamId, appSourceId: toxicFlow.id, hourBucket: HOURS_AGO(3), sent: 2000, bounced: 160, complained: 0 },
+        ])
+
+        await service.evaluateTeamBatch([teamId], EVALUATED_AT)
+
+        const rows = await getSnapshots()
+        // Per workflow: each judged on its own stream
+        expect(rows.find((r) => r.hog_flow_id === bigFlow.id)).toMatchObject({ state: 'healthy' })
+        expect(rows.find((r) => r.hog_flow_id === toxicFlow.id)).toMatchObject({ state: 'critical' })
+
+        // Tenant: pooled bounces / pooled sends (what SES's account ledger sees) ≈ 0.6% → healthy.
+        // Escalating to the worst workflow state would say critical; averaging the two rates
+        // (~4.2%) would say warning — both are wrong.
+        const teamRow = rows.find((r) => r.hog_flow_id === null)
+        expect(teamRow).toMatchObject({ state: 'healthy', emails_sent: '52000' })
+        expect(teamRow.bounce_rate).toBeCloseTo(310 / 52000)
+    })
+
     it('writes a carry-forward team snapshot when a recently evaluated team goes silent', async () => {
         const flow = await insertEmailFlow()
         mockMetrics([
