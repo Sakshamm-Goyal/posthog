@@ -1564,6 +1564,14 @@ class FeishuSourceConfig(config.Config):
 
 
 @config.config
+class FileUploadSourceConfig(config.Config):
+    table_name: str
+    file_format: str
+    upload_id: str
+    filename: str
+
+
+@config.config
 class FilloutSourceConfig(config.Config):
     api_key: str
     api_base_url: Literal["https://api.fillout.com/v1/api", "https://eu-api.fillout.com/v1/api"] | None = config.value(
@@ -5239,6 +5247,7 @@ def get_config_for_source(source: ExternalDataSourceType):
         ExternalDataSourceType.FAUNA: FaunaSourceConfig,
         ExternalDataSourceType.FEATUREBASE: FeaturebaseSourceConfig,
         ExternalDataSourceType.FEISHU: FeishuSourceConfig,
+        ExternalDataSourceType.FILEUPLOAD: FileUploadSourceConfig,
         ExternalDataSourceType.FILLOUT: FilloutSourceConfig,
         ExternalDataSourceType.FINAGE: FinageSourceConfig,
         ExternalDataSourceType.FINANCIALMODELLING: FinancialModellingSourceConfig,
