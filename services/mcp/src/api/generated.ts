@@ -14659,30 +14659,6 @@ export namespace Schemas {
       Base64: 'base64',
     } as const;
 
-    /**
-     * * `+1` - +1
-     * * `-1` - -1
-     * * `laugh` - laugh
-     * * `hooray` - hooray
-     * * `confused` - confused
-     * * `heart` - heart
-     * * `rocket` - rocket
-     * * `eyes` - eyes
-     */
-    export type ContentEnum = typeof ContentEnum[keyof typeof ContentEnum];
-
-
-    export const ContentEnum = {
-      '1': '+1',
-      NumberMinus1: '-1',
-      Laugh: 'laugh',
-      Hooray: 'hooray',
-      Confused: 'confused',
-      Heart: 'heart',
-      Rocket: 'rocket',
-      Eyes: 'eyes',
-    } as const;
-
     export interface ContextGeneration {
       /**
          * ID of the Task currently generating this folder's CONTEXT.md, or null if none.
@@ -51709,6 +51685,11 @@ export namespace Schemas {
       limit: number;
     }
 
+    /**
+     * * `ios` - iOS
+     * * `android` - Android
+     * * `web` - Web
+     */
     export type PushTokenPlatformEnum = typeof PushTokenPlatformEnum[keyof typeof PushTokenPlatformEnum];
 
 
