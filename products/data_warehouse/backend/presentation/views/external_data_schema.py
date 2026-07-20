@@ -20,6 +20,7 @@ from posthog.api.routing import TeamAndOrgViewSetMixin
 from posthog.api.utils import action
 from posthog.exceptions_capture import capture_exception
 from posthog.models.user import User
+from posthog.rbac.access_control_api_mixin import AccessControlViewSetMixin
 from posthog.utils import str_to_bool
 
 from products.data_warehouse.backend.facade.api import (
@@ -1284,8 +1285,13 @@ class SimpleExternalDataSchemaSerializer(serializers.ModelSerializer):
 
 
 @extend_schema(extensions={"x-product": "warehouse_sources"})
-class ExternalDataSchemaViewset(TeamAndOrgViewSetMixin, viewsets.ModelViewSet):
+class ExternalDataSchemaViewset(TeamAndOrgViewSetMixin, AccessControlViewSetMixin, viewsets.ModelViewSet):
     scope_object = "external_data_source"
+    # API-key scoping stays on the parent source (existing keys keep working), but access controls are
+    # stored and enforced per schema so a table can be locked down individually. Object-level enforcement
+    # already resolves ExternalDataSchema -> "external_data_schema" via model_to_resource; this lines the
+    # /access_controls management endpoint up with that same resource.
+    access_control_resource = "external_data_schema"
     scope_object_write_actions = [
         "update",
         "partial_update",

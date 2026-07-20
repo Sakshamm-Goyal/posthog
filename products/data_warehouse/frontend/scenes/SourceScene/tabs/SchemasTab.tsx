@@ -28,8 +28,10 @@ import { pluralize } from 'lib/utils/strings'
 import { teamLogic } from 'scenes/teamLogic'
 import { urls } from 'scenes/urls'
 
+import { AccessControlObjectModal } from '~/layout/navigation-3000/sidepanel/panels/access_control/AccessControlObjectModal'
 import { ExternalDataSourceType, ProductIntentContext, ProductKey } from '~/queries/schema/schema-general'
 import {
+    AccessControlResourceType,
     DataWarehouseSyncInterval,
     ExternalDataSchemaStatus,
     ExternalDataSource,
@@ -130,8 +132,15 @@ function ManagedSchemasTab({ id }: { id: string }): JSX.Element {
     }, [loadJobs, source])
 
     const showMetrics = !!featureFlags[FEATURE_FLAGS.DWH_SOURCE_METRICS]
+    const warehouseAccessControlEnabled = !!featureFlags[FEATURE_FLAGS.HOGQL_WAREHOUSE_ACCESS_CONTROL]
     // `id` is the cleaned source id; URLs use the `managed-` prefix
     const prefixedSourceId = `managed-${id}`
+
+    // The table's access-control modal is a singleton; track which schema (if any) it's editing.
+    const [accessControlSchema, setAccessControlSchema] = useState<ExternalDataSourceSchema | null>(null)
+    const openAccessControl = warehouseAccessControlEnabled
+        ? (schema: ExternalDataSourceSchema): void => setAccessControlSchema(schema)
+        : undefined
 
     return (
         <>
@@ -274,6 +283,7 @@ function ManagedSchemasTab({ id }: { id: string }): JSX.Element {
                                     resyncSchema={resyncSchema}
                                     cancelSchema={cancelSchema}
                                     deleteTable={deleteTable}
+                                    openAccessControl={openAccessControl}
                                     showMetrics={showMetrics}
                                 />
                             ),
@@ -292,7 +302,18 @@ function ManagedSchemasTab({ id }: { id: string }): JSX.Element {
                     resyncSchema={resyncSchema}
                     cancelSchema={cancelSchema}
                     deleteTable={deleteTable}
+                    openAccessControl={openAccessControl}
                     showMetrics={showMetrics}
+                />
+            )}
+            {accessControlSchema && (
+                <AccessControlObjectModal
+                    isOpen={!!accessControlSchema}
+                    onClose={() => setAccessControlSchema(null)}
+                    resource={AccessControlResourceType.ExternalDataSchema}
+                    resource_id={accessControlSchema.id}
+                    title={accessControlSchema.label ?? accessControlSchema.name}
+                    description="Control who can sync or manage this table. Members without editor access can still query it, but can't trigger syncs, change its settings, or delete it."
                 />
             )}
             {source?.source_type &&
@@ -334,6 +355,8 @@ interface ManagedSchemaTableProps {
     resyncSchema: (schema: ExternalDataSourceSchema) => void
     cancelSchema: (schema: ExternalDataSourceSchema) => void
     deleteTable: (schema: ExternalDataSourceSchema) => void
+    /** Opens the per-table access control modal. Undefined when the warehouse AC feature is off. */
+    openAccessControl?: (schema: ExternalDataSourceSchema) => void
     showMetrics: boolean
     /** Rendered inside a namespace group — the group header already shows the namespace, so strip it from row names. */
     inSchemaGroup?: boolean
@@ -350,6 +373,7 @@ function ManagedSchemaTable({
     resyncSchema,
     cancelSchema,
     deleteTable,
+    openAccessControl,
     showMetrics,
     inSchemaGroup = false,
 }: ManagedSchemaTableProps): JSX.Element {
@@ -627,6 +651,7 @@ function ManagedSchemaTable({
                                     resyncSchema={resyncSchema}
                                     cancelSchema={cancelSchema}
                                     deleteTable={deleteTable}
+                                    onOpenAccessControl={openAccessControl}
                                 />
                             </div>
                         )
@@ -784,6 +809,7 @@ function SchemaRowMore({
     resyncSchema,
     cancelSchema,
     deleteTable,
+    onOpenAccessControl,
 }: {
     source: ExternalDataSource | null
     schema: ExternalDataSourceSchema
@@ -791,6 +817,7 @@ function SchemaRowMore({
     resyncSchema: (schema: ExternalDataSourceSchema) => void
     cancelSchema: (schema: ExternalDataSourceSchema) => void
     deleteTable: (schema: ExternalDataSourceSchema) => void
+    onOpenAccessControl?: (schema: ExternalDataSourceSchema) => void
 }): JSX.Element {
     return (
         <SourceEditorAction source={source}>
@@ -799,6 +826,16 @@ function SchemaRowMore({
                     disabledReason={disabledReason}
                     overlay={
                         <>
+                            {onOpenAccessControl && (
+                                <LemonButton
+                                    type="tertiary"
+                                    size="xsmall"
+                                    fullWidth
+                                    onClick={() => onOpenAccessControl(schema)}
+                                >
+                                    Access control
+                                </LemonButton>
+                            )}
                             <Tooltip
                                 title={
                                     schema.sync_type === 'cdc'

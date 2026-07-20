@@ -252,12 +252,22 @@ class AccessControlViewSetMixin(_GenericViewSet):
 
         return None
 
+    def _access_control_resource(self) -> APIScopeObjectOrNotSupported:
+        # The AC resource a viewset manages can differ from its API `scope_object` (which drives
+        # personal-API-key scoping). The schema viewset keeps `scope_object = "external_data_source"`
+        # so existing keys keep working, but stores per-table controls under `external_data_schema`.
+        # Everyone else falls back to `scope_object`.
+        return cast(
+            APIScopeObjectOrNotSupported,
+            getattr(self, "access_control_resource", None) or getattr(self, "scope_object", None),
+        )
+
     def _get_access_control_serializer(self, *args, **kwargs):
         kwargs.setdefault("context", self.get_serializer_context())
         return AccessControlSerializer(*args, **kwargs)
 
     def _get_access_controls(self, request: Request, is_resource_level=False):
-        resource = cast(APIScopeObjectOrNotSupported, getattr(self, "scope_object", None))
+        resource = self._access_control_resource()
         user_access_control = cast(UserAccessControl, self.user_access_control)  # type: ignore
         team = cast(Team, self.team)  # type: ignore
 
@@ -302,7 +312,7 @@ class AccessControlViewSetMixin(_GenericViewSet):
         """
         Get all users with access to the resource, including explicit and implicit access.
         """
-        resource = cast(APIScopeObjectOrNotSupported, getattr(self, "scope_object", None))
+        resource = self._access_control_resource()
         team = cast(Team, self.team)  # type: ignore
 
         if not resource or resource == "INTERNAL":
@@ -356,7 +366,7 @@ class AccessControlViewSetMixin(_GenericViewSet):
         )
 
     def _update_access_controls(self, request: Request, is_resource_level=False):
-        resource = cast(APIScopeObjectOrNotSupported, getattr(self, "scope_object", None))
+        resource = self._access_control_resource()
 
         if not resource:
             raise exceptions.NotFound("Access controls are not available for this resource type.")

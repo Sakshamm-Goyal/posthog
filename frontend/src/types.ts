@@ -300,6 +300,7 @@ export enum AccessControlResourceType {
     ExperimentSavedMetric = 'experiment_saved_metric',
     Export = 'export',
     ExternalDataSource = 'external_data_source',
+    ExternalDataSchema = 'external_data_schema',
     WarehouseObjects = 'warehouse_objects',
     WarehouseTable = 'warehouse_table',
     WarehouseView = 'warehouse_view',
