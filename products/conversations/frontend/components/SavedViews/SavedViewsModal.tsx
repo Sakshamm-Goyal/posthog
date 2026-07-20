@@ -100,8 +100,10 @@ function SaveViewModal({ id }: TicketViewsLogicProps): JSX.Element {
 }
 
 export function SavedViewsModal({ id }: TicketViewsLogicProps): JSX.Element {
-    const { isModalOpen, views, viewsLoading, currentFilters } = useValues(ticketViewsLogic({ id }))
-    const { closeModal, openSaveModal, deleteView, loadView, updateView } = useActions(ticketViewsLogic({ id }))
+    const { isModalOpen, filteredViews, viewsLoading, currentFilters, searchTerm } = useValues(ticketViewsLogic({ id }))
+    const { closeModal, openSaveModal, deleteView, loadView, updateView, setSearchTerm } = useActions(
+        ticketViewsLogic({ id })
+    )
 
     const columns: LemonTableColumns<SavedTicketView> = [
         {
@@ -233,14 +235,23 @@ export function SavedViewsModal({ id }: TicketViewsLogicProps): JSX.Element {
                     </div>
                 }
             >
-                <LemonTable
-                    columns={columns}
-                    dataSource={views}
-                    rowKey="id"
-                    loading={viewsLoading}
-                    emptyState="No saved views yet."
-                    size="small"
-                />
+                <div className="space-y-2">
+                    <LemonInput
+                        type="search"
+                        placeholder="Search views"
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        autoFocus
+                    />
+                    <LemonTable
+                        columns={columns}
+                        dataSource={filteredViews}
+                        rowKey="id"
+                        loading={viewsLoading}
+                        emptyState={searchTerm ? 'No matching views.' : 'No saved views yet.'}
+                        size="small"
+                    />
+                </div>
             </LemonModal>
             <SaveViewModal id={id} />
         </>
