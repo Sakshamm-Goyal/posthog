@@ -1,6 +1,6 @@
 import { useValues } from 'kea'
 
-import { LemonTable, LemonTag, LemonTagType, Link, Tooltip } from '@posthog/lemon-ui'
+import { LemonCollapse, LemonTable, LemonTag, LemonTagType, Link, Tooltip } from '@posthog/lemon-ui'
 
 import { TZLabel } from 'lib/components/TZLabel'
 import { humanFriendlyNumber } from 'lib/utils/numbers'
@@ -43,24 +43,34 @@ const STATE_CONFIG: Record<EmailReputationStateEnumApi, { label: string; type: L
 
 function ReputationLegend(): JSX.Element {
     return (
-        <div className="border rounded p-4 bg-surface-primary">
-            <h4 className="mb-1">How scores are calculated</h4>
-            <p className="text-secondary text-sm mb-3">
-                Scores are recalculated daily from email bounces and spam complaints. Each score covers the most recent
-                sending: at least the last 24 hours and at least the last 1,000 emails, whichever is more. The project
-                score pools all workflow email together, including from workflows that were since disabled or deleted.
-            </p>
-            <div className="space-y-2">
-                {Object.entries(STATE_CONFIG).map(([state, config]) => (
-                    <div key={state} className="flex items-start gap-2">
-                        <LemonTag type={config.type} className="shrink-0">
-                            {config.label}
-                        </LemonTag>
-                        <span className="text-sm text-secondary">{config.tooltip}</span>
-                    </div>
-                ))}
-            </div>
-        </div>
+        <LemonCollapse
+            panels={[
+                {
+                    key: 'legend',
+                    header: 'How scores are calculated',
+                    content: (
+                        <>
+                            <p className="text-secondary text-sm mb-3">
+                                Scores are recalculated daily from email bounces and spam complaints. Each score covers
+                                the most recent sending: at least the last 24 hours and at least the last 1,000 emails,
+                                whichever is more. The project score pools all workflow email together, including from
+                                workflows that were since disabled or deleted.
+                            </p>
+                            <div className="space-y-2">
+                                {Object.entries(STATE_CONFIG).map(([state, config]) => (
+                                    <div key={state} className="flex items-start gap-2">
+                                        <LemonTag type={config.type} className="shrink-0">
+                                            {config.label}
+                                        </LemonTag>
+                                        <span className="text-sm text-secondary">{config.tooltip}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ),
+                },
+            ]}
+        />
     )
 }
 
