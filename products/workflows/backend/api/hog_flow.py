@@ -890,7 +890,7 @@ class WorkflowEmailReputationSnapshotSerializer(EmailReputationSnapshotSerialize
         read_only=True, source="hog_flow.name", allow_null=True, help_text="Display name of the workflow."
     )
     history = serializers.SerializerMethodField(
-        help_text="This workflow's recent snapshots (oldest first, one per daily evaluation run), including the latest."
+        help_text="This workflow's snapshots from the last 7 days (oldest first, one per daily evaluation run), including the latest."
     )
 
     @extend_schema_field(EmailReputationSnapshotSerializer(many=True))
@@ -2253,8 +2253,10 @@ class HogFlowViewSet(
     # (i.e. no sends within its lookback), so a long-dead sender's last bad rate isn't pinned
     # to the top of the list forever.
     WORKFLOW_REPUTATION_RECENCY_DAYS = 7
-    # How far back each listed workflow's per-day history reaches.
-    WORKFLOW_REPUTATION_HISTORY_DAYS = 30
+    # How far back each listed workflow's per-day history reaches. Deliberately short: history
+    # ships inline on the reputation endpoint (workflows x days rows per response), so widening
+    # this fans out the payload for every workflow listed.
+    WORKFLOW_REPUTATION_HISTORY_DAYS = 7
 
     @extend_schema(responses={200: TeamEmailReputationResponseSerializer})
     @action(detail=False, methods=["GET"], pagination_class=None, filter_backends=[], url_path="reputation")

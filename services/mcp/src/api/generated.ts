@@ -62689,7 +62689,7 @@ export namespace Schemas {
          * @nullable
          */
       readonly hog_flow_name: string | null;
-      /** This workflow's recent snapshots (oldest first, one per daily evaluation run), including the latest. */
+      /** This workflow's snapshots from the last 7 days (oldest first, one per daily evaluation run), including the latest. */
       readonly history: readonly EmailReputationSnapshot[];
     }
 
