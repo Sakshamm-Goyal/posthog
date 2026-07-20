@@ -2,9 +2,15 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
+from unittest.mock import AsyncMock, patch
 
 import psycopg
 
+from products.warehouse_sources.backend.temporal.data_imports.pipelines.pipeline_v3.postgres_queue.consumer import (
+    BatchConsumer,
+    ConsumerConfig,
+    DeltaBatchConsumerAdapter,
+)
 from products.warehouse_sources.backend.temporal.data_imports.pipelines.pipeline_v3.postgres_queue.jobs_db import (
     BATCH_TABLE,
     LEASE_TABLE,
@@ -519,6 +525,31 @@ class TestBatchQueueLeaseRenewal:
 
         assert renewed is False
 
+    @pytest.mark.asyncio
+    async def test_renew_of_expired_lease_returns_false(self, conn):
+        # Expiry is terminal: an owner whose lease lapsed (e.g. a >TTL connectivity
+        # blip) must not resurrect it and finish over a recovery re-queue.
+        await _insert_lease(conn, team_id=1, schema_id="s1", owner=OWNER_A, expires_in_seconds=-1)
+
+        renewed = await BatchQueue.renew_lease(
+            conn, team_id=1, schema_id="s1", owner_token=OWNER_A, lease_ttl_seconds=300
+        )
+
+        assert renewed is False, "the owner of an expired lease must abandon, not renew"
+
+    @pytest.mark.parametrize("expires_in_seconds,deleted", [(-1, True), (300, False)])
+    @pytest.mark.asyncio
+    async def test_sweep_delete_removes_only_the_expired_corpse(self, conn, expires_in_seconds, deleted):
+        await _insert_lease(conn, team_id=1, schema_id="s1", owner=OWNER_A, expires_in_seconds=expires_in_seconds)
+
+        await BatchQueue.delete_expired_lease(conn, team_id=1, schema_id="s1")
+
+        assert (await _lease_count(conn, schema_id="s1") == 0) is deleted
+        renewed = await BatchQueue.renew_lease(
+            conn, team_id=1, schema_id="s1", owner_token=OWNER_A, lease_ttl_seconds=300
+        )
+        assert renewed is (not deleted), "delete must fence the old owner without touching live leases"
+
 
 @pytest.mark.django_db(transaction=True)
 class TestVerifyGroupLeaseSync:
@@ -1006,6 +1037,36 @@ class TestStateDualWrite:
         row = await cur.fetchone()
         assert row is not None and row[0] == 2  # the log still grows
 
+    @pytest.mark.parametrize(
+        "expected_kind,requeue_lands",
+        [("stale", False), ("current", True), ("omitted", True)],
+    )
+    @pytest.mark.asyncio
+    async def test_cas_requeue_yields_to_states_written_after_the_read(self, conn, expected_kind, requeue_lands):
+        # The recovery-sweep race: the sweep reads an executing batch, the owner
+        # completes it, then the sweep re-queues off its now-stale read.
+        bid = await _insert_batch(conn)
+        await _insert_backdated_executing(conn, batch_id=bid, age_seconds=120, attempt=1)
+        _, _, observed = await _batch_state(conn, bid)
+        await BatchQueue.update_status(conn, batch_id=bid, job_state="succeeded", attempt=1)
+        _, _, current = await _batch_state(conn, bid)
+
+        cas_kwargs: dict[str, Any] = {}
+        if expected_kind == "stale":
+            cas_kwargs["expected_state_changed_at"] = observed
+        elif expected_kind == "current":
+            cas_kwargs["expected_state_changed_at"] = current
+        updated = await BatchQueue.update_status(conn, batch_id=bid, job_state="waiting_retry", attempt=1, **cas_kwargs)
+
+        state, _, _ = await _batch_state(conn, bid)
+        if requeue_lands:
+            assert (updated, state) == (1, "waiting_retry")
+        else:
+            assert (updated, state) == (0, "succeeded")
+            cur = await conn.execute(f"SELECT count(*) FROM {STATUS_TABLE} WHERE batch_id = %s", (bid,))
+            row = await cur.fetchone()
+            assert row is not None and row[0] == 2, "a CAS miss must not even append a status row"
+
     @pytest.mark.asyncio
     async def test_fail_run_fails_columns_of_pending_batches_only(self, conn):
         pending = await _insert_batch(conn, batch_index=0, run_uuid="run-dw")
@@ -1154,3 +1215,33 @@ class TestSyncTypeFleetPartition:
 
         assert [str(b.id) for b in cdc_stale] == [cdc_bid]
         assert {str(b.id) for b in all_stale} == {cdc_bid, fr_bid}
+
+
+@pytest.mark.django_db(transaction=True)
+class TestRecoverySweepVsLiveOwner:
+    @pytest.mark.asyncio
+    async def test_owner_completion_between_scan_and_requeue_stays_succeeded(self, conn, _db_url):
+        # The headline race: the sweep scans a stale executing batch, a resurrected
+        # owner completes it, then the sweep's re-queue must yield instead of landing.
+        bid = await _insert_batch(conn)
+        await _insert_backdated_executing(conn, batch_id=bid, age_seconds=120, attempt=1)
+
+        consumer = BatchConsumer(
+            config=ConsumerConfig(database_url=_db_url, recovery_grace_seconds=60),
+            process_batch=AsyncMock(),
+        )
+        consumer._recovery_conn = conn
+
+        real_get_stale = DeltaBatchConsumerAdapter.get_stale_executing
+
+        async def scan_then_owner_completes(adapter, c, **kwargs):
+            stale = await real_get_stale(adapter, c, **kwargs)
+            await BatchQueue.update_status(conn, batch_id=bid, job_state="succeeded", attempt=1)
+            return stale
+
+        with patch.object(DeltaBatchConsumerAdapter, "get_stale_executing", scan_then_owner_completes):
+            await consumer._recovery_sweep()
+
+        cur = await conn.execute(f"SELECT latest_state FROM {BATCH_TABLE} WHERE id = %s", (bid,))
+        row = await cur.fetchone()
+        assert row is not None and row[0] == "succeeded", "the sweep must not re-queue a batch its owner finished"

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -112,7 +113,16 @@ class TestProcessSingle:
         batch = _make_batch(latest_attempt=0)
         states: list[str] = []
 
-        async def track_status(conn, *, batch_id, job_state, attempt, error_response=None, batch_created_at=None):
+        async def track_status(
+            conn,
+            *,
+            batch_id,
+            job_state,
+            attempt,
+            error_response=None,
+            batch_created_at=None,
+            expected_state_changed_at=None,
+        ):
             states.append(job_state)
 
         consumer._process_batch = AsyncMock()
@@ -130,7 +140,16 @@ class TestProcessSingle:
         batch = _make_batch(latest_attempt=0)
         states: list[str] = []
 
-        async def track_status(conn, *, batch_id, job_state, attempt, error_response=None, batch_created_at=None):
+        async def track_status(
+            conn,
+            *,
+            batch_id,
+            job_state,
+            attempt,
+            error_response=None,
+            batch_created_at=None,
+            expected_state_changed_at=None,
+        ):
             states.append(job_state)
 
         consumer._process_batch = AsyncMock(side_effect=ValueError("boom"))
@@ -362,7 +381,8 @@ class TestRecoverySweep:
     @pytest.mark.asyncio
     async def test_retries_stale_below_max(self):
         consumer = _make_consumer(max_attempts=3)
-        stale_batch = _make_batch(latest_attempt=1)
+        # The observed state clock must ride into the re-queue as its CAS guard.
+        stale_batch = _make_batch(latest_attempt=1, state_changed_at=datetime(2026, 1, 1, tzinfo=UTC))
 
         with (
             patch(
@@ -388,6 +408,7 @@ class TestRecoverySweep:
             attempt=1,
             error_response={"error": "executing timed out - pod restart or OOM"},
             batch_created_at=stale_batch.created_at,
+            expected_state_changed_at=stale_batch.state_changed_at,
         )
         mock_unlock.assert_called_once_with(
             consumer._recovery_conn, batches=[stale_batch], owner_token=consumer._owner_token

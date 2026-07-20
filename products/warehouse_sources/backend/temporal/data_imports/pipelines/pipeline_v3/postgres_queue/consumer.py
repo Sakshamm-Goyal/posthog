@@ -154,14 +154,16 @@ class DeltaBatchConsumerAdapter:
         attempt: int,
         error_response: dict[str, Any] | None = None,
         batch_created_at: datetime | None = None,
-    ) -> None:
-        await BatchQueue.update_status(
+        expected_state_changed_at: datetime | None = None,
+    ) -> int:
+        return await BatchQueue.update_status(
             conn,
             batch_id=batch_id,
             job_state=job_state,
             attempt=attempt,
             error_response=error_response,
             batch_created_at=batch_created_at,
+            expected_state_changed_at=expected_state_changed_at,
         )
 
     async def fail_run(
@@ -239,6 +241,15 @@ class DeltaBatchConsumerAdapter:
             owner_token=owner_token,
             lease_ttl_seconds=lease_ttl_seconds,
         )
+
+    async def delete_expired_lease(
+        self,
+        conn: psycopg.AsyncConnection[Any],
+        *,
+        team_id: int,
+        schema_id: str,
+    ) -> None:
+        await BatchQueue.delete_expired_lease(conn, team_id=team_id, schema_id=schema_id)
 
     async def get_stale_executing(
         self,
