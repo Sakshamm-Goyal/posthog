@@ -87,42 +87,45 @@ function TeamReputationCard({ reputation }: { reputation: EmailReputationSnapsho
 
 function WorkflowHistoryTable({ history }: { history: readonly EmailReputationSnapshotApi[] }): JSX.Element {
     return (
-        <LemonTable
-            size="small"
-            embedded
-            dataSource={[...history].reverse()}
-            rowKey={(snapshot) => snapshot.evaluated_at}
-            columns={[
-                {
-                    title: 'Evaluated',
-                    key: 'evaluated_at',
-                    render: (_, snapshot: EmailReputationSnapshotApi) => <TZLabel time={snapshot.evaluated_at} />,
-                },
-                {
-                    title: 'State',
-                    key: 'state',
-                    render: (_, snapshot: EmailReputationSnapshotApi) => <StateTag state={snapshot.state} />,
-                },
-                {
-                    title: 'Bounce rate',
-                    key: 'bounce_rate',
-                    align: 'right',
-                    render: (_, snapshot: EmailReputationSnapshotApi) => formatRate(snapshot.bounce_rate),
-                },
-                {
-                    title: 'Complaint rate',
-                    key: 'complaint_rate',
-                    align: 'right',
-                    render: (_, snapshot: EmailReputationSnapshotApi) => formatRate(snapshot.complaint_rate),
-                },
-                {
-                    title: 'Emails sent',
-                    key: 'emails_sent',
-                    align: 'right',
-                    render: (_, snapshot: EmailReputationSnapshotApi) => humanFriendlyNumber(snapshot.emails_sent),
-                },
-            ]}
-        />
+        <div className="py-1">
+            <div className="text-secondary text-xs mb-1">Daily scores from the last 7 days</div>
+            <LemonTable
+                size="small"
+                embedded
+                dataSource={[...history].reverse()}
+                rowKey={(snapshot) => snapshot.evaluated_at}
+                columns={[
+                    {
+                        title: 'Evaluated',
+                        key: 'evaluated_at',
+                        render: (_, snapshot: EmailReputationSnapshotApi) => <TZLabel time={snapshot.evaluated_at} />,
+                    },
+                    {
+                        title: 'State',
+                        key: 'state',
+                        render: (_, snapshot: EmailReputationSnapshotApi) => <StateTag state={snapshot.state} />,
+                    },
+                    {
+                        title: 'Bounce rate',
+                        key: 'bounce_rate',
+                        align: 'right',
+                        render: (_, snapshot: EmailReputationSnapshotApi) => formatRate(snapshot.bounce_rate),
+                    },
+                    {
+                        title: 'Complaint rate',
+                        key: 'complaint_rate',
+                        align: 'right',
+                        render: (_, snapshot: EmailReputationSnapshotApi) => formatRate(snapshot.complaint_rate),
+                    },
+                    {
+                        title: 'Emails sent',
+                        key: 'emails_sent',
+                        align: 'right',
+                        render: (_, snapshot: EmailReputationSnapshotApi) => humanFriendlyNumber(snapshot.emails_sent),
+                    },
+                ]}
+            />
+        </div>
     )
 }
 
