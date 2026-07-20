@@ -38,6 +38,7 @@ import { ConventionalCommitScopeTag } from '../cards/ReportCard'
 import { CommitContent } from './artefactTypes'
 import { DetailSection } from './DetailSection'
 import { DiscussReportButton } from './DiscussReportButton'
+import { PrCommentSection } from './PrCommentSection'
 import { PullRequestBranchTag, PullRequestDiffPanel } from './PullRequestDiffPanel'
 import { ReportActivitySection } from './ReportActivitySection'
 import { ReportDetailAction, useReportDetailActions } from './ReportDetailActions'
@@ -519,6 +520,9 @@ export function ReportDetail({ report, tab }: { report: SignalReport; tab: Inbox
             diffBranchTag={
                 canDiff && commit && latestCommitArtefact ? <PullRequestBranchTag commit={commit} /> : undefined
             }
-        />
+        >
+            {/* Comment on the PR from the inbox and watch the run that addresses it, when a PR exists. */}
+            {hasPr && <PrCommentSection report={report} />}
+        </InboxDetailFrame>
     )
 }

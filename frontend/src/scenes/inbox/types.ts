@@ -1,6 +1,7 @@
 import type { UserBasicType } from '~/types'
 
 import {
+    type PrActiveRunApi,
     type SignalReportRefundApi,
     SignalSourceProductApi as SignalSourceProduct,
     SignalSourceTypeApi as SignalSourceType,
@@ -72,6 +73,8 @@ export interface SignalReport {
     scout_name?: string | null
     /** PR URL from the latest implementation task run, if available. */
     implementation_pr_url?: string | null
+    /** The run currently touching this report's PR, when one is active (detail/retrieve view only). */
+    pr_active_run?: PrActiveRunApi | null
     /** Reason code from the latest dismissal artefact (when archived). See dismissalReasons. */
     dismissal_reason?: string | null
     /** Free-form note from the latest dismissal artefact (when archived). */

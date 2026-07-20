@@ -8,10 +8,15 @@ import { SignalNode } from 'scenes/debug/signals/types'
 import { teamLogic } from 'scenes/teamLogic'
 import { userLogic } from 'scenes/userLogic'
 
+import { isTerminalRunStatus } from 'products/posthog_ai/frontend/api/logics'
 import { Task, TaskRunStatus } from 'products/posthog_ai/frontend/types/taskTypes'
-import { signalsReportsSignalsRetrieve } from 'products/signals/frontend/generated/api'
+import { signalsReportsPrCommentCreate, signalsReportsSignalsRetrieve } from 'products/signals/frontend/generated/api'
 import { signalsReportArtefactsDiff } from 'products/signals/frontend/generated/api'
-import type { CommitDiffResponseApi } from 'products/signals/frontend/generated/api.schemas'
+import type {
+    CommitDiffResponseApi,
+    PrActiveRunApi,
+    PrCommentResponseApi,
+} from 'products/signals/frontend/generated/api.schemas'
 
 import {
     deriveTaskPurpose,
@@ -114,6 +119,13 @@ export const inboxReportDetailLogic = kea<inboxReportDetailLogicType>([
         setSelectedTaskId: (taskId: string | null) => ({ taskId }),
         // Inline-expand a linked task's run log within the report detail's Runs section.
         toggleExpandedTask: (taskId: string) => ({ taskId }),
+        // The run currently addressing the report's PR comment — seeded from the report, updated by the
+        // comment response and the status poll.
+        setPrActiveRun: (run: PrActiveRunApi | null) => ({ run }),
+        // Controlled value of the "Comment on PR" textarea (kept in the logic so it clears on submit).
+        setPrCommentDraft: (draft: string) => ({ draft }),
+        // Re-read the report's `pr_active_run` so the live PR-run indicator advances while it runs.
+        refreshPrRunStatus: true,
     }),
 
     loaders(({ props, values }) => ({
@@ -222,6 +234,19 @@ export const inboxReportDetailLogic = kea<inboxReportDetailLogicType>([
                 },
             },
         ],
+        // Posts a comment on the report's PR and starts (or feeds into) the run that addresses it. The
+        // response carries either the run to watch (`started`/`forwarded`), a GitHub connect prompt
+        // (`connect_required`), or `no_pr`. The button's in-flight state rides `prCommentResponseLoading`.
+        prCommentResponse: [
+            null as PrCommentResponseApi | null,
+            {
+                submitPrComment: async ({ content }: { content: string }): Promise<PrCommentResponseApi> => {
+                    return await signalsReportsPrCommentCreate(String(teamLogic.values.currentTeamId), props.reportId, {
+                        content,
+                    })
+                },
+            },
+        ],
     })),
 
     reducers({
@@ -278,6 +303,24 @@ export const inboxReportDetailLogic = kea<inboxReportDetailLogicType>([
                 loadReportDiff: (_, { artefactId }) => artefactId,
             },
         ],
+        // The live PR run, updated by the comment response and the status poll. Seeded from the report's
+        // `pr_active_run` in the `setReport` listener (not here) so a stale report prop can't clobber a
+        // fresher run picked up from the poll.
+        prActiveRun: [
+            null as PrActiveRunApi | null,
+            {
+                setPrActiveRun: (_, { run }) => run,
+            },
+        ],
+        // The "Comment on PR" textarea value; cleared once the comment posts so the box empties on success
+        // but keeps the user's text on failure to retry.
+        prCommentDraft: [
+            '',
+            {
+                setPrCommentDraft: (_, { draft }) => draft,
+                submitPrCommentSuccess: () => '',
+            },
+        ],
     }),
 
     selectors({
@@ -300,6 +343,12 @@ export const inboxReportDetailLogic = kea<inboxReportDetailLogicType>([
         isReportActive: [
             (s) => [s.report],
             (report: SignalReport | null): boolean => (report ? ACTIVE_STATUSES.includes(report.status) : false),
+        ],
+        // The PR run counts as live while it has a non-terminal status — drives the status poll and the
+        // pulsing indicator. A terminal run stays visible but stops polling and reads as done.
+        isPrRunLive: [
+            (s) => [s.prActiveRun],
+            (prActiveRun: PrActiveRunApi | null): boolean => !!prActiveRun && !isTerminalRunStatus(prActiveRun.status),
         ],
         // The most recent `commit` artefact — its branch is treated as the report's branch to diff
         // against the repository default branch. A report's code work may span several pushes; the
@@ -423,51 +472,89 @@ export const inboxReportDetailLogic = kea<inboxReportDetailLogicType>([
         ],
     }),
 
-    listeners(({ actions, values, cache, props }) => ({
-        searchAvailableReviewers: async ({ query }, breakpoint) => {
-            await breakpoint(300)
-            actions.loadAvailableReviewers({ query: query.trim() || undefined })
-        },
-        // Persist a reviewer add/remove. The optimistic list is already in place (set by the action's
-        // reducer); on success reload the artefact so we converge on the server's enriched data, and on
-        // failure clear the optimistic override so the UI snaps back. Mirrors desktop `useUpdateSuggestedReviewers`.
-        updateReviewers: async ({ artefactId, content }) => {
-            try {
-                await api.signalReports.updateArtefact(props.reportId, artefactId, content)
-                await actions.loadReportArtefacts()
-            } catch (error: any) {
-                lemonToast.error(error?.detail || error?.message || 'Failed to update reviewers')
-            } finally {
-                // Clear the optimistic override; the freshly-loaded artefact is now the source of truth.
-                actions.setOptimisticReviewers(null)
-            }
-        },
-        // The artefact log is the single source for the activity timeline AND the task associations,
-        // so deriving the linked tasks hangs off each successful artefact load rather than issuing a
-        // second identical fetch. The branch diff also cascades from here (once artefacts resolve we
-        // know the latest commit artefact), but only re-fetches when a *new* commit lands.
-        loadReportArtefactsSuccess: () => {
-            actions.loadReportTasks()
-            const commit = values.latestCommitArtefact
-            if (commit && commit.id !== values.diffArtefactId) {
-                actions.loadReportDiff({ artefactId: commit.id })
-            }
-        },
-        // Poll the artefact log only while the report is active; stop once it reaches a terminal status
-        // (or is unloaded). Tasks are re-derived via `loadReportArtefactsSuccess`. Mirrors desktop
-        // `useReportTasks` gating. The keyed disposable replaces any running interval on re-add and is
-        // torn down automatically on unmount / tab hide.
-        setReport: () => {
-            if (values.isReportActive) {
+    listeners(({ actions, values, cache, props }) => {
+        // Poll the report's PR run status while it's live; stop once it reaches a terminal status (or the
+        // logic unmounts / the tab hides). The keyed disposable replaces any running interval on re-add.
+        const syncPrRunPoll = (): void => {
+            if (values.isPrRunLive) {
                 cache.disposables.add(() => {
-                    const interval = setInterval(() => actions.loadReportArtefacts(), REPORT_TASKS_POLL_INTERVAL_MS)
+                    const interval = setInterval(() => actions.refreshPrRunStatus(), REPORT_TASKS_POLL_INTERVAL_MS)
                     return () => clearInterval(interval)
-                }, 'reportTasksPoll')
+                }, 'prRunStatusPoll')
             } else {
-                cache.disposables.dispose('reportTasksPoll')
+                cache.disposables.dispose('prRunStatusPoll')
             }
-        },
-    })),
+        }
+        return {
+            searchAvailableReviewers: async ({ query }, breakpoint) => {
+                await breakpoint(300)
+                actions.loadAvailableReviewers({ query: query.trim() || undefined })
+            },
+            // Persist a reviewer add/remove. The optimistic list is already in place (set by the action's
+            // reducer); on success reload the artefact so we converge on the server's enriched data, and on
+            // failure clear the optimistic override so the UI snaps back. Mirrors desktop `useUpdateSuggestedReviewers`.
+            updateReviewers: async ({ artefactId, content }) => {
+                try {
+                    await api.signalReports.updateArtefact(props.reportId, artefactId, content)
+                    await actions.loadReportArtefacts()
+                } catch (error: any) {
+                    lemonToast.error(error?.detail || error?.message || 'Failed to update reviewers')
+                } finally {
+                    // Clear the optimistic override; the freshly-loaded artefact is now the source of truth.
+                    actions.setOptimisticReviewers(null)
+                }
+            },
+            // The artefact log is the single source for the activity timeline AND the task associations,
+            // so deriving the linked tasks hangs off each successful artefact load rather than issuing a
+            // second identical fetch. The branch diff also cascades from here (once artefacts resolve we
+            // know the latest commit artefact), but only re-fetches when a *new* commit lands.
+            loadReportArtefactsSuccess: () => {
+                actions.loadReportTasks()
+                const commit = values.latestCommitArtefact
+                if (commit && commit.id !== values.diffArtefactId) {
+                    actions.loadReportDiff({ artefactId: commit.id })
+                }
+            },
+            // Poll the artefact log only while the report is active; stop once it reaches a terminal status
+            // (or is unloaded). Tasks are re-derived via `loadReportArtefactsSuccess`. Mirrors desktop
+            // `useReportTasks` gating. The keyed disposable replaces any running interval on re-add and is
+            // torn down automatically on unmount / tab hide.
+            setReport: () => {
+                if (values.isReportActive) {
+                    cache.disposables.add(() => {
+                        const interval = setInterval(() => actions.loadReportArtefacts(), REPORT_TASKS_POLL_INTERVAL_MS)
+                        return () => clearInterval(interval)
+                    }, 'reportTasksPoll')
+                } else {
+                    cache.disposables.dispose('reportTasksPoll')
+                }
+                // Seed the PR run only when we don't already track one, so a stale report prop can't clobber a
+                // fresher run the poll or comment response already surfaced. `setPrActiveRun` (re)gates the poll.
+                if (values.prActiveRun === null && values.report?.pr_active_run) {
+                    actions.setPrActiveRun(values.report.pr_active_run)
+                }
+            },
+            // Post succeeded: watch the returned shared run (started/forwarded). `connect_required`/`no_pr`
+            // carry no run and are surfaced inline by the component off `prCommentResponse`.
+            submitPrCommentSuccess: ({ prCommentResponse }) => {
+                if (prCommentResponse.run) {
+                    actions.setPrActiveRun(prCommentResponse.run)
+                }
+            },
+            submitPrCommentFailure: ({ error }: { error: any }) => {
+                lemonToast.error(error?.detail || error?.message || "Couldn't post your comment. Please try again.")
+            },
+            // (Re)gate the status poll whenever the tracked run changes: a fresh live run starts it, a
+            // terminal run stops it.
+            setPrActiveRun: () => {
+                syncPrRunPoll()
+            },
+            refreshPrRunStatus: async () => {
+                const report = await api.signalReports.get(props.reportId)
+                actions.setPrActiveRun(report.pr_active_run ?? null)
+            },
+        }
+    }),
 
     propsChanged(({ actions, props }, oldProps) => {
         // The shell re-renders the detail with a refreshed `selectedReport`; re-gate polling on the new status.

@@ -55,6 +55,7 @@ from posthog.models import Team, User
 from posthog.models.activity_logging.activity_log import Change, Detail, log_activity
 from posthog.models.activity_logging.model_activity import is_impersonated_session
 from posthog.models.integration import GitHubIntegration, Integration
+from posthog.models.scoping import team_scope
 from posthog.models.team.extensions import get_or_create_team_extension
 from posthog.permissions import APIScopePermission
 from posthog.temporal.common.client import sync_connect
@@ -82,6 +83,9 @@ from products.signals.backend.billing import (
     refund_ineligibility_reason,
 )
 from products.signals.backend.facade.api import emit_signal
+from products.signals.backend.github_mention.identity import MentionIdentityStatus, resolve_user_push_identity
+from products.signals.backend.github_mention.process import MentionOutcome, dispatch_eligible_mention
+from products.signals.backend.github_mention.webhook import mark_comment_handled_directly
 from products.signals.backend.implementation_pr import fetch_implementation_pr_urls_for_reports
 from products.signals.backend.models import (
     ArtefactAttribution,
@@ -103,6 +107,8 @@ from products.signals.backend.report_generation.resolve_reviewers import (
 )
 from products.signals.backend.serializers import (
     CommitDiffResponseSerializer,
+    PrCommentRequestSerializer,
+    PrCommentResponseSerializer,
     ReportSignalsResponseSerializer,
     SignalReportArtefactLogCreateSerializer,
     SignalReportArtefactLogUpdateSerializer,
@@ -1157,11 +1163,25 @@ class SignalReportViewSet(
         except Exception:
             logger.exception("signals.enriched_context.implementation_pr_url_failed", report_id=str(report.id))
             implementation_pr_url_map = {}
+        # Live status of the run currently addressing this report's PR (detail view only — one
+        # report, so no N+1). Best-effort: a hiccup must never 500 an otherwise-available report.
+        pr_active_run_map: dict[str, dict] = {}
+        pr_url = implementation_pr_url_map.get(str(report.id))
+        if pr_url:
+            try:
+                parsed = GitHubIntegration.parse_pull_request_url(pr_url)
+                if parsed:
+                    run = tasks_facade.get_active_run_for_pr(pr_url, f"{parsed[0]}/{parsed[1]}")
+                    if run is not None:
+                        pr_active_run_map[str(report.id)] = {"id": str(run.id), "status": run.status}
+            except Exception:
+                logger.exception("signals.enriched_context.pr_active_run_failed", report_id=str(report.id))
         return {
             **self.get_serializer_context(),
             "source_products_map": {rid: meta.source_products for rid, meta in signal_meta_map.items()},
             "scout_names_map": {rid: meta.scout_name for rid, meta in signal_meta_map.items() if meta.scout_name},
             "implementation_pr_url_map": implementation_pr_url_map,
+            "pr_active_run_map": pr_active_run_map,
         }
 
     def retrieve(self, request, *args, **kwargs):
@@ -1467,6 +1487,82 @@ class SignalReportViewSet(
         report_data = SignalReportSerializer(report, context=self._enriched_report_context(report)).data
         signals_list = fetch_signals_for_report_sync(self.team, str(report.id))
         return Response({"report": report_data, "signals": signals_list})
+
+    @extend_schema(
+        request=PrCommentRequestSerializer,
+        responses={200: PrCommentResponseSerializer},
+        summary="Comment on a report's PR from the inbox",
+        description=(
+            "Post a comment on this report's pull request and have the PostHog agent address it. "
+            "The comment is posted to the PR and the run that addresses it is started (or, if a run "
+            "is already working the PR, the comment is fed into that shared run). Requires a connected "
+            "personal GitHub account with write access so commits are authored as you — otherwise "
+            "returns status 'connect_required' with a connect_url."
+        ),
+    )
+    @action(detail=True, methods=["post"], url_path="pr_comment", required_scopes=["task:write"])
+    def pr_comment(self, request, pk=None, **kwargs):
+        report = cast(SignalReport, self.get_object())
+        req = PrCommentRequestSerializer(data=request.data)
+        req.is_valid(raise_exception=True)
+        content = req.validated_data["content"]
+
+        pr_url = fetch_implementation_pr_urls_for_reports([str(report.id)]).get(str(report.id))
+        parsed = GitHubIntegration.parse_pull_request_url(pr_url) if pr_url else None
+        if not pr_url or parsed is None:
+            return Response({"status": "no_pr", "run": None, "connect_url": None}, status=status.HTTP_400_BAD_REQUEST)
+        repository = f"{parsed[0]}/{parsed[1]}"
+        pr_number = parsed[2]
+
+        context = tasks_facade.resolve_signal_pr_mention_context(pr_url, repository)
+        if context is None:
+            return Response({"status": "no_pr", "run": None, "connect_url": None}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = cast(User, request.user)
+        identity = resolve_user_push_identity(user=user, team=self.team, repository=repository)
+        if identity.status != MentionIdentityStatus.ELIGIBLE:
+            connect_url = f"{settings.SITE_URL}/project/{self.team.id}/settings/integrations"
+            return Response({"status": "connect_required", "run": None, "connect_url": connect_url})
+
+        github = GitHubIntegration.first_for_team_repository(self.team.id, repository)
+        if github is None:
+            return Response({"error": "GitHub integration unavailable."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Post the comment AS THE USER (their user-to-server token), prefixed with the bot mention, so
+        # on GitHub it reads exactly like the user @-mentioning the bot. We then trigger the run
+        # directly for an immediate response, and mark the comment id so the webhook — which also sees
+        # this user-authored comment — skips it instead of double-triggering.
+        bot_slug = getattr(settings, "GITHUB_APP_SLUG", "") or ""
+        mention_prefix = f"@{bot_slug} " if bot_slug else ""
+        posted = identity.user_github_integration.comment_on_pull_request_as_user(
+            repository, pr_number, f"{mention_prefix}{content}"
+        )
+        if not posted.get("success"):
+            return Response(
+                {"error": "Couldn't post the comment to the pull request."}, status=status.HTTP_502_BAD_GATEWAY
+            )
+        comment_id = int(posted.get("id") or 0)
+        if comment_id:
+            mark_comment_handled_directly(comment_id)
+
+        with team_scope(self.team.id):
+            outcome, run_id = dispatch_eligible_mention(
+                team=self.team,
+                context=context,
+                github=github,
+                repository=repository,
+                pr_url=pr_url,
+                pr_number=pr_number,
+                comment_id=comment_id,
+                commenter_account_id=0,  # report-view path: identity is request.user, not a webhook account
+                user_id=user.id,
+                followup_content=content,
+            )
+
+        run_dto = tasks_facade.get_task_run(str(run_id)) if run_id else None
+        run_payload = {"id": str(run_dto.id), "status": run_dto.status} if run_dto else None
+        resp_status = "forwarded" if outcome == MentionOutcome.FORWARDED else "started"
+        return Response({"status": resp_status, "run": run_payload, "connect_url": None})
 
     @extend_schema(
         request=SignalReportStateRequestSerializer,

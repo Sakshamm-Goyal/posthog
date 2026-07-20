@@ -48,6 +48,22 @@ export const SignalsReportsPartialUpdateBody = /* @__PURE__ */ zod
     )
 
 /**
+ * Post a comment on this report's pull request and have the PostHog agent address it. The comment is posted to the PR and the run that addresses it is started (or, if a run is already working the PR, the comment is fed into that shared run). Requires a connected personal GitHub account with write access so commits are authored as you — otherwise returns status 'connect_required' with a connect_url.
+ * @summary Comment on a report's PR from the inbox
+ */
+export const signalsReportsPrCommentCreateBodyContentMax = 10000
+
+export const SignalsReportsPrCommentCreateBody = /* @__PURE__ */ zod
+    .object({
+        content: zod
+            .string()
+            .min(1)
+            .max(signalsReportsPrCommentCreateBodyContentMax)
+            .describe('The comment to post on the PR and have the agent address.'),
+    })
+    .describe("Body for commenting on a report's PR from the inbox.")
+
+/**
  * Refund the flat charge for this report's implementation PR and archive the report. Refunds auto-approve: the charge is either excluded from usage before it is ever reported to billing (refund on the same UTC day as the PR run) or returned as a Stripe customer-balance credit on the next invoice. A refunded PR does not count toward the free monthly PR allowance. One refund per report, ever — repeat calls return the existing refund with already_refunded=true. The report is archived as part of the refund (a resolved report stays resolved) and can't be restored afterwards.
  * @summary Refund a report's implementation PR
  */
