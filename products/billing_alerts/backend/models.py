@@ -122,8 +122,8 @@ class BillingAlertConfiguration(UUIDModel):
 
         if self.baseline_window_days < 1:
             raise ValidationError({"baseline_window_days": "Must be at least 1."})
-        if self.check_interval_hours < 1:
-            raise ValidationError({"check_interval_hours": "Must be at least 1."})
+        if self.check_interval_hours not in (1, 2, 3, 4, 6, 8, 12, 24):
+            raise ValidationError({"check_interval_hours": "Choose a supported interval."})
         if self.minimum_value < 0:
             raise ValidationError({"minimum_value": "Must be greater than or equal to 0."})
         if self.team_id:
