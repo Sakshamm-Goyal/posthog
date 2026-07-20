@@ -237,7 +237,6 @@
           ExternalDataSourceType.DEEL: DeelSourceConfig,
           ExternalDataSourceType.DEEPGRAM: DeepgramSourceConfig,
           ExternalDataSourceType.DEEPSOURCE: DeepsourceSourceConfig,
-          ExternalDataSourceType.DELIGHTED: DelightedSourceConfig,
           ExternalDataSourceType.DENODEPLOY: DenoDeploySourceConfig,
           ExternalDataSourceType.DEPUTY: DeputySourceConfig,
           ExternalDataSourceType.DEVINAI: DevinAISourceConfig,
