@@ -43,7 +43,7 @@ import {
     AssigneeResolver,
     AssigneeSelect,
 } from '../../components/Assignee'
-import { ChannelsTag } from '../../components/Channels/ChannelsTag'
+import { ChannelsTag, getChannelThreadUrl } from '../../components/Channels/ChannelsTag'
 import { ComposeTicketButton } from '../../components/ComposeTicket'
 import { ConversationsDisabledBanner } from '../../components/ConversationsDisabledBanner'
 import { IdentityBadge } from '../../components/IdentityBadge/IdentityBadge'
@@ -198,7 +198,13 @@ export const SUPPORT_TICKETS_TABLE_COLUMNS: LemonTableColumns<Ticket> = [
     {
         title: 'Channel',
         key: 'channel',
-        render: (_, ticket) => <ChannelsTag channel={ticket.channel_source} detail={ticket.channel_detail} />,
+        render: (_, ticket) => (
+            <ChannelsTag
+                channel={ticket.channel_source}
+                detail={ticket.channel_detail}
+                to={getChannelThreadUrl(ticket)}
+            />
+        ),
     },
     {
         title: 'Tags',
