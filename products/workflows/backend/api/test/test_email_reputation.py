@@ -71,3 +71,7 @@ class TestEmailReputationAPI(APIBaseTest):
             ("Fine workflow", "healthy"),
         ]
         assert data["workflows"][0]["hog_flow_id"] == str(bad_flow.id)
+
+        # Each workflow entry carries its own per-run history, oldest first
+        assert [row["state"] for row in data["workflows"][1]["history"]] == ["critical", "healthy"]
+        assert [row["state"] for row in data["workflows"][0]["history"]] == ["critical"]

@@ -85,6 +85,47 @@ function TeamReputationCard({ reputation }: { reputation: EmailReputationSnapsho
     )
 }
 
+function WorkflowHistoryTable({ history }: { history: readonly EmailReputationSnapshotApi[] }): JSX.Element {
+    return (
+        <LemonTable
+            size="small"
+            embedded
+            dataSource={[...history].reverse()}
+            rowKey={(snapshot) => snapshot.evaluated_at}
+            columns={[
+                {
+                    title: 'Evaluated',
+                    key: 'evaluated_at',
+                    render: (_, snapshot: EmailReputationSnapshotApi) => <TZLabel time={snapshot.evaluated_at} />,
+                },
+                {
+                    title: 'State',
+                    key: 'state',
+                    render: (_, snapshot: EmailReputationSnapshotApi) => <StateTag state={snapshot.state} />,
+                },
+                {
+                    title: 'Bounce rate',
+                    key: 'bounce_rate',
+                    align: 'right',
+                    render: (_, snapshot: EmailReputationSnapshotApi) => formatRate(snapshot.bounce_rate),
+                },
+                {
+                    title: 'Complaint rate',
+                    key: 'complaint_rate',
+                    align: 'right',
+                    render: (_, snapshot: EmailReputationSnapshotApi) => formatRate(snapshot.complaint_rate),
+                },
+                {
+                    title: 'Emails sent',
+                    key: 'emails_sent',
+                    align: 'right',
+                    render: (_, snapshot: EmailReputationSnapshotApi) => humanFriendlyNumber(snapshot.emails_sent),
+                },
+            ]}
+        />
+    )
+}
+
 export function WorkflowsReputation(): JSX.Element {
     const { teamReputation, workflowSnapshots, reputationResponseLoading } = useValues(workflowsReputationLogic)
 
@@ -150,6 +191,12 @@ export function WorkflowsReputation(): JSX.Element {
                         ),
                     },
                 ]}
+                expandable={{
+                    rowExpandable: (snapshot: WorkflowEmailReputationSnapshotApi) => snapshot.history.length > 1,
+                    expandedRowRender: (snapshot: WorkflowEmailReputationSnapshotApi) => (
+                        <WorkflowHistoryTable history={snapshot.history} />
+                    ),
+                }}
             />
         </div>
     )

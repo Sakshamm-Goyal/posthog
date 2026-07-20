@@ -1005,6 +1005,8 @@ export interface WorkflowEmailReputationSnapshotApi {
      * @nullable
      */
     readonly hog_flow_name: string | null
+    /** This workflow's recent snapshots (oldest first, one per daily evaluation run), including the latest. */
+    readonly history: readonly EmailReputationSnapshotApi[]
 }
 
 export interface TeamEmailReputationResponseApi {

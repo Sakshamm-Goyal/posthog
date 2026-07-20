@@ -889,9 +889,17 @@ class WorkflowEmailReputationSnapshotSerializer(EmailReputationSnapshotSerialize
     hog_flow_name = serializers.CharField(
         read_only=True, source="hog_flow.name", allow_null=True, help_text="Display name of the workflow."
     )
+    history = serializers.SerializerMethodField(
+        help_text="This workflow's recent snapshots (oldest first, one per daily evaluation run), including the latest."
+    )
+
+    @extend_schema_field(EmailReputationSnapshotSerializer(many=True))
+    def get_history(self, obj: EmailReputationSnapshot) -> list[dict]:
+        rows = self.context.get("workflow_history", {}).get(obj.hog_flow_id, [])
+        return list(EmailReputationSnapshotSerializer(rows, many=True).data)
 
     class Meta(EmailReputationSnapshotSerializer.Meta):
-        fields = [*EmailReputationSnapshotSerializer.Meta.fields, "hog_flow_id", "hog_flow_name"]
+        fields = [*EmailReputationSnapshotSerializer.Meta.fields, "hog_flow_id", "hog_flow_name", "history"]
         read_only_fields = fields
 
 
@@ -2245,6 +2253,8 @@ class HogFlowViewSet(
     # (i.e. no sends within its lookback), so a long-dead sender's last bad rate isn't pinned
     # to the top of the list forever.
     WORKFLOW_REPUTATION_RECENCY_DAYS = 7
+    # How far back each listed workflow's per-day history reaches.
+    WORKFLOW_REPUTATION_HISTORY_DAYS = 30
 
     @extend_schema(responses={200: TeamEmailReputationResponseSerializer})
     @action(detail=False, methods=["GET"], pagination_class=None, filter_backends=[], url_path="reputation")
@@ -2263,17 +2273,25 @@ class HogFlowViewSet(
         )
         latest = team_snapshots[0] if team_snapshots else None
 
-        workflow_snapshots = list(
+        # One row per workflow per run over the history window, grouped in Python so each workflow
+        # entry carries its recent history alongside the latest snapshot.
+        now = timezone.now()
+        workflow_rows = (
             EmailReputationSnapshot.objects.unscoped()
             .filter(
                 team_id=self.team_id,
                 hog_flow__isnull=False,
-                evaluated_at__gte=timezone.now() - timedelta(days=self.WORKFLOW_REPUTATION_RECENCY_DAYS),
+                evaluated_at__gte=now - timedelta(days=self.WORKFLOW_REPUTATION_HISTORY_DAYS),
             )
-            .order_by("hog_flow_id", "-evaluated_at")
-            .distinct("hog_flow_id")
+            .order_by("hog_flow_id", "evaluated_at")
             .select_related("hog_flow")
         )
+        history_by_flow: dict[uuid_mod.UUID, list[EmailReputationSnapshot]] = {}
+        for row in workflow_rows:
+            history_by_flow.setdefault(row.hog_flow_id, []).append(row)
+
+        recency_cutoff = now - timedelta(days=self.WORKFLOW_REPUTATION_RECENCY_DAYS)
+        workflow_snapshots = [rows[-1] for rows in history_by_flow.values() if rows[-1].evaluated_at >= recency_cutoff]
         # Sort by raw state string (not the State enum constructor, which raises on values a newer
         # evaluator may write before this code deploys); unknown states sort last.
         severity = {state.value: rank for state, rank in self._REPUTATION_STATE_SEVERITY.items()}
@@ -2291,7 +2309,8 @@ class HogFlowViewSet(
                     "reputation": latest,
                     "history": list(reversed(team_snapshots)),
                     "workflows": workflow_snapshots,
-                }
+                },
+                context={"workflow_history": history_by_flow},
             ).data
         )
 
