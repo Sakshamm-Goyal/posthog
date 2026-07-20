@@ -2,7 +2,6 @@ import { useValues } from 'kea'
 
 import { LemonTable, LemonTag, LemonTagType, Link, Tooltip } from '@posthog/lemon-ui'
 
-import { Sparkline } from 'lib/components/Sparkline'
 import { TZLabel } from 'lib/components/TZLabel'
 import { humanFriendlyNumber } from 'lib/utils/numbers'
 import { urls } from 'scenes/urls'
@@ -47,13 +46,7 @@ function formatRate(rate: number): string {
     return `${(rate * 100).toFixed(2)}%`
 }
 
-function TeamReputationCard({
-    reputation,
-    history,
-}: {
-    reputation: EmailReputationSnapshotApi
-    history: readonly EmailReputationSnapshotApi[]
-}): JSX.Element {
+function TeamReputationCard({ reputation }: { reputation: EmailReputationSnapshotApi }): JSX.Element {
     return (
         <div className="border rounded p-4 bg-surface-primary">
             <div className="flex items-center gap-2">
@@ -80,30 +73,17 @@ function TeamReputationCard({
                     </div>
                 </div>
             </div>
-            {history.length > 1 && (
-                <div className="mt-4">
-                    <div className="text-secondary text-xs mb-1">Bounce rate over recent evaluations</div>
-                    <Sparkline
-                        className="w-full h-12"
-                        type="line"
-                        data={history.map((snapshot) => snapshot.bounce_rate * 100)}
-                        labels={history.map((snapshot) => new Date(snapshot.evaluated_at).toLocaleDateString())}
-                        name="Bounce rate (%)"
-                    />
-                </div>
-            )}
         </div>
     )
 }
 
 export function WorkflowsReputation(): JSX.Element {
-    const { teamReputation, history, workflowSnapshots, reputationResponseLoading } =
-        useValues(workflowsReputationLogic)
+    const { teamReputation, workflowSnapshots, reputationResponseLoading } = useValues(workflowsReputationLogic)
 
     return (
         <div className="space-y-4" data-attr="workflows-reputation">
             {teamReputation ? (
-                <TeamReputationCard reputation={teamReputation} history={history} />
+                <TeamReputationCard reputation={teamReputation} />
             ) : (
                 !reputationResponseLoading && (
                     <div className="border rounded p-4 text-secondary">
