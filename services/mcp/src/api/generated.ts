@@ -9982,6 +9982,63 @@ export namespace Schemas {
       totals: AppMetricsTotalsResponseTotals;
     }
 
+    /**
+     * * `everyone` - Everyone
+     * * `members` - Members
+     * * `agents` - Agents
+     */
+    export type AppliesToEnum = typeof AppliesToEnum[keyof typeof AppliesToEnum];
+
+
+    export const AppliesToEnum = {
+      Everyone: 'everyone',
+      Members: 'members',
+      Agents: 'agents',
+    } as const;
+
+    /**
+     * * `members` - members
+     * * `agents` - agents
+     */
+    export type AudienceEnum = typeof AudienceEnum[keyof typeof AudienceEnum];
+
+
+    export const AudienceEnum = {
+      Members: 'members',
+      Agents: 'agents',
+    } as const;
+
+    /**
+     * * `allow` - Allow all
+     * * `user` - Member decides
+     * * `ask` - Ask for destructive
+     * * `block` - Block destructive
+     */
+    export type MCPPolicyPresetEnum = typeof MCPPolicyPresetEnum[keyof typeof MCPPolicyPresetEnum];
+
+
+    export const MCPPolicyPresetEnum = {
+      Allow: 'allow',
+      User: 'user',
+      Ask: 'ask',
+      Block: 'block',
+    } as const;
+
+    export interface ApplyPreset {
+      /** Which audience's baseline to overwrite.
+       *
+       * * `members` - members
+       * * `agents` - agents */
+      audience: AudienceEnum;
+      /** Preset to apply.
+       *
+       * * `allow` - Allow all
+       * * `user` - Member decides
+       * * `ask` - Ask for destructive
+       * * `block` - Block destructive */
+      preset: MCPPolicyPresetEnum;
+    }
+
     export interface ApprovalPolicy {
       readonly id: string;
       /** @maxLength 128 */
@@ -10136,6 +10193,26 @@ export namespace Schemas {
       PositionBased: 'position_based',
     } as const;
 
+    export interface AuditActorServiceAccount {
+      /** Service account id. */
+      id: string;
+      /** Agent display name. */
+      name: string;
+      /** Agent identity handle. */
+      handle: string;
+    }
+
+    export interface AuditCounts {
+      /** Every audited tool call. */
+      all: number;
+      /** Calls made by service accounts. */
+      agents: number;
+      /** Calls that were approved or are awaiting approval. */
+      approvals: number;
+      /** Calls the gateway blocked. */
+      blocked: number;
+    }
+
     /**
      * * `oauth` - oauth
      * * `credentials` - credentials
@@ -10146,6 +10223,18 @@ export namespace Schemas {
     export const AuthMethodEnum = {
       Oauth: 'oauth',
       Credentials: 'credentials',
+    } as const;
+
+    /**
+     * * `individual` - Individual accounts
+     * * `shared` - Shared credential
+     */
+    export type AuthModeEnum = typeof AuthModeEnum[keyof typeof AuthModeEnum];
+
+
+    export const AuthModeEnum = {
+      Individual: 'individual',
+      Shared: 'shared',
     } as const;
 
     export interface Author {
@@ -20321,6 +20410,26 @@ export namespace Schemas {
     }
 
     /**
+     * * `rule` - rule
+     * * `scope` - scope
+     * * `team` - team
+     * * `preset` - preset
+     * * `legacy` - legacy
+     * * `default` - default
+     */
+    export type DecidedByEnum = typeof DecidedByEnum[keyof typeof DecidedByEnum];
+
+
+    export const DecidedByEnum = {
+      Rule: 'rule',
+      Scope: 'scope',
+      Team: 'team',
+      Preset: 'preset',
+      Legacy: 'legacy',
+      Default: 'default',
+    } as const;
+
+    /**
      * * `bayesian` - Bayesian
      * * `frequentist` - Frequentist
      */
@@ -21141,6 +21250,18 @@ export namespace Schemas {
       /** Whether the report's suggested reviewers were replaced. */
       reviewers_set: boolean;
     }
+
+    /**
+     * * `needs_approval` - Require approval
+     * * `do_not_use` - Block
+     */
+    export type EffectEnum = typeof EffectEnum[keyof typeof EffectEnum];
+
+
+    export const EffectEnum = {
+      NeedsApproval: 'needs_approval',
+      DoNotUse: 'do_not_use',
+    } as const;
 
     export type EffectiveMembershipLevelEnum = typeof EffectiveMembershipLevelEnum[keyof typeof EffectiveMembershipLevelEnum];
 
@@ -29043,6 +29164,207 @@ export namespace Schemas {
     }
 
     /**
+     * * `active` - Active
+     * * `paused` - Paused
+     */
+    export type MCPServiceAccountStatusEnum = typeof MCPServiceAccountStatusEnum[keyof typeof MCPServiceAccountStatusEnum];
+
+
+    export const MCPServiceAccountStatusEnum = {
+      Active: 'active',
+      Paused: 'paused',
+    } as const;
+
+    /**
+     * One agent's access to a gateway server.
+     */
+    export interface GatewayAgentAccess {
+      /** Service account granted access. */
+      service_account_id: string;
+      /** Agent display name. */
+      name: string;
+      /** Agent identity handle, e.g. svc-support. */
+      handle: string;
+      /** active, or paused (all access off).
+       *
+       * * `active` - Active
+       * * `paused` - Paused */
+      status: MCPServiceAccountStatusEnum;
+      /**
+         * When the agent last made a call.
+         * @nullable
+         */
+      last_active_at: string | null;
+      /** Admin who shared this server with the agent. */
+      granted_by: UserBasic | null;
+    }
+
+    export const GatewayConfigUpdateMemberDefaultPreset = {...MCPPolicyPresetEnum,...BlankEnum,} as const
+    export const GatewayConfigUpdateAgentDefaultPreset = {...MCPPolicyPresetEnum,...BlankEnum,} as const
+    export interface GatewayConfigUpdate {
+      /** Whether non-admin members may register custom MCP servers. */
+      allow_custom_servers?: boolean;
+      /** Baseline preset for members.
+       *
+       * * `allow` - Allow all
+       * * `user` - Member decides
+       * * `ask` - Ask for destructive
+       * * `block` - Block destructive */
+      member_default_preset?: typeof GatewayConfigUpdateMemberDefaultPreset[keyof typeof GatewayConfigUpdateMemberDefaultPreset];
+      /** Baseline preset for agents.
+       *
+       * * `allow` - Allow all
+       * * `user` - Member decides
+       * * `ask` - Ask for destructive
+       * * `block` - Block destructive */
+      agent_default_preset?: typeof GatewayConfigUpdateAgentDefaultPreset[keyof typeof GatewayConfigUpdateAgentDefaultPreset];
+    }
+
+    /**
+     * One member's personal connection to a gateway server.
+     */
+    export interface GatewayConnection {
+      /** Installation row backing this connection. */
+      installation_id: string;
+      /** The member who connected. */
+      user: UserBasic;
+      /**
+         * When this connection last proxied a tool call. Null if never used.
+         * @nullable
+         */
+      last_used_at: string | null;
+      /** True when the OAuth round-trip has not completed yet. */
+      pending_oauth: boolean;
+      /** True when the stored token was invalidated and needs reauth. */
+      needs_reauth: boolean;
+    }
+
+    /**
+     * One team member's gateway posture (admin overview).
+     */
+    export interface GatewayMemberSummary {
+      /** The member. */
+      user: UserBasic;
+      /** Whether the member is an organization admin or owner. */
+      is_org_admin: boolean;
+      /** Gateway servers the member has a personal connection to. */
+      connected_server_ids: string[];
+      /** Gateway servers an admin turned off for this member. */
+      revoked_server_ids: string[];
+    }
+
+    /**
+     * * `team` - Team default
+     * * `member` - Member
+     * * `agent` - Agent
+     */
+    export type ScopeTypeEnum = typeof ScopeTypeEnum[keyof typeof ScopeTypeEnum];
+
+
+    export const ScopeTypeEnum = {
+      Team: 'team',
+      Member: 'member',
+      Agent: 'agent',
+    } as const;
+
+    /**
+     * * `approved` - Approved
+     * * `needs_approval` - Needs approval
+     * * `do_not_use` - Do not use
+     */
+    export type MCPToolApprovalStateEnum = typeof MCPToolApprovalStateEnum[keyof typeof MCPToolApprovalStateEnum];
+
+
+    export const MCPToolApprovalStateEnum = {
+      Approved: 'approved',
+      NeedsApproval: 'needs_approval',
+      DoNotUse: 'do_not_use',
+    } as const;
+
+    export interface ToolPolicyEntry {
+      /** Tool to set the policy for. */
+      tool_name: string;
+      /** State to apply for this scope.
+       *
+       * * `approved` - Approved
+       * * `needs_approval` - Needs approval
+       * * `do_not_use` - Do not use */
+      policy_state: MCPToolApprovalStateEnum;
+    }
+
+    export interface GatewayPoliciesUpsert {
+      /** Which scope to resolve: the team default, one member, or one agent.
+       *
+       * * `team` - Team default
+       * * `member` - Member
+       * * `agent` - Agent */
+      scope_type?: ScopeTypeEnum;
+      /** Member scope target. Defaults to the requesting user. */
+      scope_user_id?: number;
+      /** Agent scope target. Required when scope_type is agent. */
+      scope_service_account_id?: string;
+      /** Per-tool states to upsert for the scope. */
+      policies: ToolPolicyEntry[];
+    }
+
+    /**
+     * The admin-managed shared credential of a shared-auth server.
+     */
+    export interface GatewaySharedCredential {
+      /** Shared installation row holding the credential. */
+      installation_id: string;
+      /** Admin who connected the shared credential. */
+      managed_by: UserBasic | null;
+      /** Whether the shared credential is enabled. */
+      is_enabled: boolean;
+      /** True when the shared credential has not finished OAuth. */
+      pending_oauth: boolean;
+      /** True when the shared credential needs re-authentication. */
+      needs_reauth: boolean;
+      /**
+         * When the shared credential last proxied a call.
+         * @nullable
+         */
+      last_used_at: string | null;
+    }
+
+    /**
+     * * `personal` - personal
+     * * `shared` - shared
+     */
+    export type MCPInstallationScopeEnum = typeof MCPInstallationScopeEnum[keyof typeof MCPInstallationScopeEnum];
+
+
+    export const MCPInstallationScopeEnum = {
+      Personal: 'personal',
+      Shared: 'shared',
+    } as const;
+
+    /**
+     * The requesting user's own connection to a gateway server.
+     */
+    export interface GatewayYourConnection {
+      /** The caller's installation row for this server. */
+      installation_id: string;
+      /** Whether the caller connects personally or via the shared credential.
+       *
+       * * `personal` - personal
+       * * `shared` - shared */
+      scope: MCPInstallationScopeEnum;
+      /** Per-connection switch — false when self-disabled. */
+      is_enabled: boolean;
+      /** True when the OAuth round-trip has not completed yet. */
+      pending_oauth: boolean;
+      /** True when the stored token was invalidated and needs reauth. */
+      needs_reauth: boolean;
+      /**
+         * When the caller last proxied a call through this connection.
+         * @nullable
+         */
+      last_used_at: string | null;
+    }
+
+    /**
      * * `last_n_days` - last_n_days
      * * `since_last_run` - since_last_run
      */
@@ -32881,18 +33203,6 @@ export namespace Schemas {
       PosthogCode: 'posthog-code',
     } as const;
 
-    /**
-     * * `personal` - personal
-     * * `shared` - shared
-     */
-    export type MCPInstallationScopeEnum = typeof MCPInstallationScopeEnum[keyof typeof MCPInstallationScopeEnum];
-
-
-    export const MCPInstallationScopeEnum = {
-      Personal: 'personal',
-      Shared: 'shared',
-    } as const;
-
     export interface InstallCustom {
       /** @maxLength 200 */
       name: string;
@@ -32910,6 +33220,14 @@ export namespace Schemas {
        * * `personal` - personal
        * * `shared` - shared */
       scope?: MCPInstallationScopeEnum;
+      /** Whether the server starts enabled for the whole team. Non-default values are admin-only. */
+      team_enabled?: boolean;
+      /** For shared-credential servers: whether members may also connect personal accounts. Admin-only. */
+      allow_personal?: boolean;
+      /** Service accounts to share the server with at install time. Admin-only. */
+      agent_ids?: string[];
+      /** In-app path to land back on after the OAuth round-trip. Must be a same-app relative path. */
+      return_path?: string;
     }
 
     export interface InstallTemplate {
@@ -32922,6 +33240,14 @@ export namespace Schemas {
        * * `personal` - personal
        * * `shared` - shared */
       scope?: MCPInstallationScopeEnum;
+      /** Whether the server starts enabled for the whole team. Non-default values are admin-only. */
+      team_enabled?: boolean;
+      /** For shared-credential servers: whether members may also connect personal accounts. Admin-only. */
+      allow_personal?: boolean;
+      /** Service accounts to share the server with at install time. Admin-only. */
+      agent_ids?: string[];
+      /** In-app path to land back on after the OAuth round-trip. Must be a same-app relative path. */
+      return_path?: string;
     }
 
     /**
@@ -34917,6 +35243,44 @@ export namespace Schemas {
     }
 
     /**
+     * * `auto` - Auto-approved
+     * * `approved` - Approved
+     * * `pending` - Awaiting approval
+     * * `blocked` - Blocked
+     */
+    export type MCPAuditDecisionEnum = typeof MCPAuditDecisionEnum[keyof typeof MCPAuditDecisionEnum];
+
+
+    export const MCPAuditDecisionEnum = {
+      Auto: 'auto',
+      Approved: 'approved',
+      Pending: 'pending',
+      Blocked: 'blocked',
+    } as const;
+
+    export interface MCPAuditEvent {
+      readonly id: string;
+      readonly created_at: string;
+      /** Gateway server name at call time (denormalized). */
+      readonly server_name: string;
+      /** Tool that was called. */
+      readonly tool_name: string;
+      /** How the gateway decided the call.
+       *
+       * * `auto` - Auto-approved
+       * * `approved` - Approved
+       * * `pending` - Awaiting approval
+       * * `blocked` - Blocked */
+      readonly decision: MCPAuditDecisionEnum;
+      /** Member who made the call, if any. */
+      readonly actor_user: UserBasic | null;
+      /** Agent that made the call, if any. Null for member calls. */
+      readonly actor_service_account: AuditActorServiceAccount | null;
+      /** Denormalized actor label (email or handle) that survives deletion. */
+      readonly actor_label: string;
+    }
+
+    /**
      * * `api_key` - API Key
      * * `oauth` - OAuth
      */
@@ -35000,6 +35364,90 @@ export namespace Schemas {
        * * `docs` - Docs
        * * `other` - Other */
       category?: MCPFeedbackCreateCategoryEnum;
+    }
+
+    /**
+     * * `business` - Business Operations
+     * * `data` - Data & Analytics
+     * * `design` - Design & Content
+     * * `dev` - Developer Tools & APIs
+     * * `infra` - Infrastructure
+     * * `productivity` - Productivity & Collaboration
+     */
+    export type MCPServerCategoryEnum = typeof MCPServerCategoryEnum[keyof typeof MCPServerCategoryEnum];
+
+
+    export const MCPServerCategoryEnum = {
+      Business: 'business',
+      Data: 'data',
+      Design: 'design',
+      Dev: 'dev',
+      Infra: 'infra',
+      Productivity: 'productivity',
+    } as const;
+
+    /**
+     * A server registered in the team's gateway, with connection summary.
+     */
+    export interface MCPGatewayServer {
+      readonly id: string;
+      readonly name: string;
+      readonly url: string;
+      readonly description: string;
+      readonly category: MCPServerCategoryEnum;
+      readonly auth_mode: AuthModeEnum;
+      readonly is_team_enabled: boolean;
+      readonly allow_personal_connections: boolean;
+      /** Lowercase key from the linked template for brand icons. Empty for custom servers. */
+      readonly icon_key: string;
+      /** Documentation URL from the template. */
+      readonly docs_url: string;
+      /**
+         * Linked catalog template.
+         * @nullable
+         */
+      readonly template_id: string | null;
+      /** Number of live tools known for this server. */
+      readonly tool_count: number;
+      /** Members with a personal connection to this server. */
+      readonly connections: readonly GatewayConnection[];
+      /** The requesting user's own connection, or null when not connected. */
+      readonly your_connection: GatewayYourConnection | null;
+      /** Shared credential details when auth_mode is shared, else null. */
+      readonly shared_credential: GatewaySharedCredential | null;
+      /** Agents this server is shared with. */
+      readonly agents: readonly GatewayAgentAccess[];
+      /** Ids of members whose access an admin has turned off. */
+      readonly revoked_user_ids: readonly number[];
+      /** True when an admin has turned this server off for the requesting user. */
+      readonly is_revoked_for_you: boolean;
+      /** Who registered the server. */
+      readonly created_by: UserBasic;
+      readonly created_at: string;
+      readonly updated_at: string;
+    }
+
+    export interface MCPGatewayServerUpdate {
+      /**
+         * Display name shown across the gateway.
+         * @maxLength 200
+         */
+      name?: string;
+      /** Short description shown on server cards. */
+      description?: string;
+      /** Catalog category used for filter chips.
+       *
+       * * `business` - Business Operations
+       * * `data` - Data & Analytics
+       * * `design` - Design & Content
+       * * `dev` - Developer Tools & APIs
+       * * `infra` - Infrastructure
+       * * `productivity` - Productivity & Collaboration */
+      category?: MCPServerCategoryEnum;
+      /** Master switch — off means members and agents can neither see nor call the server. */
+      is_team_enabled?: boolean;
+      /** For shared-credential servers: whether members may also connect their own account. */
+      allow_personal_connections?: boolean;
     }
 
     export interface MCPIntentClusterToolEntry {
@@ -35180,6 +35628,37 @@ export namespace Schemas {
       blocked?: boolean;
     }
 
+    export interface MCPOrgRule {
+      readonly id: string;
+      /**
+         * Short rule name shown wherever the rule locks a tool.
+         * @maxLength 200
+         */
+      name: string;
+      /** Why this guardrail exists. */
+      description?: string;
+      /** Audience the rule constrains.
+       *
+       * * `everyone` - Everyone
+       * * `members` - Members
+       * * `agents` - Agents */
+      applies_to?: AppliesToEnum;
+      /** State the rule forces on matching tools.
+       *
+       * * `needs_approval` - Require approval
+       * * `do_not_use` - Block */
+      effect?: EffectEnum;
+      /**
+         * fnmatch pattern against tool names. Blank matches destructive tools heuristically.
+         * @maxLength 400
+         */
+      tool_pattern?: string;
+      /** Disabled rules are kept but not evaluated. */
+      enabled?: boolean;
+      readonly created_at: string;
+      readonly updated_at: string;
+    }
+
     /**
      * * `personal` - Personal
      * * `shared` - Shared
@@ -35219,27 +35698,13 @@ export namespace Schemas {
       readonly updated_at: string | null;
     }
 
-    /**
-     * * `approved` - Approved
-     * * `needs_approval` - Needs approval
-     * * `do_not_use` - Do not use
-     */
-    export type MCPServerInstallationToolApprovalStateEnum = typeof MCPServerInstallationToolApprovalStateEnum[keyof typeof MCPServerInstallationToolApprovalStateEnum];
-
-
-    export const MCPServerInstallationToolApprovalStateEnum = {
-      Approved: 'approved',
-      NeedsApproval: 'needs_approval',
-      DoNotUse: 'do_not_use',
-    } as const;
-
     export interface MCPServerInstallationTool {
       readonly id: string;
       readonly tool_name: string;
       readonly display_name: string;
       readonly description: string;
       readonly input_schema: unknown;
-      approval_state?: MCPServerInstallationToolApprovalStateEnum;
+      approval_state?: MCPToolApprovalStateEnum;
       readonly last_seen_at: string;
       /** @nullable */
       readonly removed_at: string | null;
@@ -35247,26 +35712,6 @@ export namespace Schemas {
       /** @nullable */
       readonly updated_at: string | null;
     }
-
-    /**
-     * * `business` - Business Operations
-     * * `data` - Data & Analytics
-     * * `design` - Design & Content
-     * * `dev` - Developer Tools & APIs
-     * * `infra` - Infrastructure
-     * * `productivity` - Productivity & Collaboration
-     */
-    export type MCPServerTemplateCategoryEnum = typeof MCPServerTemplateCategoryEnum[keyof typeof MCPServerTemplateCategoryEnum];
-
-
-    export const MCPServerTemplateCategoryEnum = {
-      Business: 'business',
-      Data: 'data',
-      Design: 'design',
-      Dev: 'dev',
-      Infra: 'infra',
-      Productivity: 'productivity',
-    } as const;
 
     export interface MCPServerTemplate {
       readonly id: string;
@@ -35280,7 +35725,82 @@ export namespace Schemas {
       auth_type?: MCPAuthTypeEnum;
       /** @maxLength 100 */
       icon_key?: string;
-      category?: MCPServerTemplateCategoryEnum;
+      category?: MCPServerCategoryEnum;
+    }
+
+    export interface MCPServiceAccount {
+      readonly id: string;
+      readonly name: string;
+      readonly description: string;
+      /** Stable identity handle the agent authenticates as, e.g. svc-docs-agent. */
+      readonly handle: string;
+      /** active, or paused (all access off).
+       *
+       * * `active` - Active
+       * * `paused` - Paused */
+      readonly status: MCPServiceAccountStatusEnum;
+      /** Masked bearer token; the full token is only shown once. */
+      readonly token_mask: string;
+      /** Gateway servers this agent has access to. */
+      readonly server_ids: readonly string[];
+      /**
+         * When the agent last made a call through the gateway.
+         * @nullable
+         */
+      readonly last_active_at: string | null;
+      readonly created_at: string;
+      readonly updated_at: string;
+    }
+
+    export interface MCPServiceAccountCreate {
+      /**
+         * Agent display name, e.g. Docs Agent.
+         * @maxLength 200
+         */
+      name: string;
+      /** What this agent does. */
+      description?: string;
+    }
+
+    export interface MCPServiceAccountUpdate {
+      /**
+         * Agent display name.
+         * @maxLength 200
+         */
+      name?: string;
+      /** What this agent does. */
+      description?: string;
+      /** active, or paused (all access off).
+       *
+       * * `active` - Active
+       * * `paused` - Paused */
+      status?: MCPServiceAccountStatusEnum;
+    }
+
+    export interface MCPServiceAccountWithToken {
+      readonly id: string;
+      readonly name: string;
+      readonly description: string;
+      /** Stable identity handle the agent authenticates as, e.g. svc-docs-agent. */
+      readonly handle: string;
+      /** active, or paused (all access off).
+       *
+       * * `active` - Active
+       * * `paused` - Paused */
+      readonly status: MCPServiceAccountStatusEnum;
+      /** Masked bearer token; the full token is only shown once. */
+      readonly token_mask: string;
+      /** Gateway servers this agent has access to. */
+      readonly server_ids: readonly string[];
+      /**
+         * When the agent last made a call through the gateway.
+         * @nullable
+         */
+      readonly last_active_at: string | null;
+      readonly created_at: string;
+      readonly updated_at: string;
+      /** The full bearer token. Returned exactly once — on creation or rotation. */
+      readonly token: string;
     }
 
     export interface MCPSession {
@@ -35656,6 +36176,13 @@ export namespace Schemas {
       /** @maxLength 10000 */
       text: string;
       scraping_status?: ScrapingStatusEnum | BlankEnum | null;
+    }
+
+    export interface MemberAccessUpdate {
+      /** Gateway server to toggle for the member. */
+      gateway_server_id: string;
+      /** False turns the server off for the member; true restores it. */
+      enabled: boolean;
     }
 
     export type MessageContextualTools = { [key: string]: unknown };
@@ -38223,6 +38750,33 @@ export namespace Schemas {
       results: MCPAnalyticsSubmission[];
     }
 
+    export interface PaginatedMCPAuditEventList {
+      count: number;
+      /** @nullable */
+      next?: string | null;
+      /** @nullable */
+      previous?: string | null;
+      results: MCPAuditEvent[];
+    }
+
+    export interface PaginatedMCPGatewayServerList {
+      count: number;
+      /** @nullable */
+      next?: string | null;
+      /** @nullable */
+      previous?: string | null;
+      results: MCPGatewayServer[];
+    }
+
+    export interface PaginatedMCPOrgRuleList {
+      count: number;
+      /** @nullable */
+      next?: string | null;
+      /** @nullable */
+      previous?: string | null;
+      results: MCPOrgRule[];
+    }
+
     export interface PaginatedMCPServerInstallationList {
       count: number;
       /** @nullable */
@@ -38248,6 +38802,15 @@ export namespace Schemas {
       /** @nullable */
       previous?: string | null;
       results: MCPServerTemplate[];
+    }
+
+    export interface PaginatedMCPServiceAccountList {
+      count: number;
+      /** @nullable */
+      next?: string | null;
+      /** @nullable */
+      previous?: string | null;
+      results: MCPServiceAccount[];
     }
 
     export interface PaginatedMCPSessionList {
@@ -39159,6 +39722,52 @@ export namespace Schemas {
       /** @nullable */
       previous?: string | null;
       results: Repo[];
+    }
+
+    /**
+     * One tool with its effective policy for the requested scope.
+     */
+    export interface ResolvedToolPolicy {
+      /** Tool name as exposed by the upstream server. */
+      tool_name: string;
+      /** Tool description from the upstream server. */
+      description: string;
+      /** Effective state for the scope.
+       *
+       * * `approved` - Approved
+       * * `needs_approval` - Needs approval
+       * * `do_not_use` - Do not use */
+      policy_state: MCPToolApprovalStateEnum;
+      /** What the team-level chain (row or preset) yields, ignoring the scope. Null when the team imposes nothing.
+       *
+       * * `approved` - Approved
+       * * `needs_approval` - Needs approval
+       * * `do_not_use` - Do not use */
+      team_state: MCPToolApprovalStateEnum | null;
+      /** True when the requester can't change this row (rule match, or admin-imposed for a member). */
+      locked: boolean;
+      /** Which policy layer decided the state.
+       *
+       * * `rule` - rule
+       * * `scope` - scope
+       * * `team` - team
+       * * `preset` - preset
+       * * `legacy` - legacy
+       * * `default` - default */
+      decided_by: DecidedByEnum;
+      /** Matching org rule name, when decided_by is rule. */
+      rule_name: string;
+      /** Matching org rule description, when decided_by is rule. */
+      rule_description: string;
+    }
+
+    export interface PaginatedResolvedToolPolicyList {
+      count: number;
+      /** @nullable */
+      next?: string | null;
+      /** @nullable */
+      previous?: string | null;
+      results: ResolvedToolPolicy[];
     }
 
     export interface ReviewQueueItem {
@@ -46016,10 +46625,79 @@ export namespace Schemas {
       readonly updated_at?: string | null;
     }
 
+    export interface PatchedMCPGatewayServerUpdate {
+      /**
+         * Display name shown across the gateway.
+         * @maxLength 200
+         */
+      name?: string;
+      /** Short description shown on server cards. */
+      description?: string;
+      /** Catalog category used for filter chips.
+       *
+       * * `business` - Business Operations
+       * * `data` - Data & Analytics
+       * * `design` - Design & Content
+       * * `dev` - Developer Tools & APIs
+       * * `infra` - Infrastructure
+       * * `productivity` - Productivity & Collaboration */
+      category?: MCPServerCategoryEnum;
+      /** Master switch — off means members and agents can neither see nor call the server. */
+      is_team_enabled?: boolean;
+      /** For shared-credential servers: whether members may also connect their own account. */
+      allow_personal_connections?: boolean;
+    }
+
+    export interface PatchedMCPOrgRule {
+      readonly id?: string;
+      /**
+         * Short rule name shown wherever the rule locks a tool.
+         * @maxLength 200
+         */
+      name?: string;
+      /** Why this guardrail exists. */
+      description?: string;
+      /** Audience the rule constrains.
+       *
+       * * `everyone` - Everyone
+       * * `members` - Members
+       * * `agents` - Agents */
+      applies_to?: AppliesToEnum;
+      /** State the rule forces on matching tools.
+       *
+       * * `needs_approval` - Require approval
+       * * `do_not_use` - Block */
+      effect?: EffectEnum;
+      /**
+         * fnmatch pattern against tool names. Blank matches destructive tools heuristically.
+         * @maxLength 400
+         */
+      tool_pattern?: string;
+      /** Disabled rules are kept but not evaluated. */
+      enabled?: boolean;
+      readonly created_at?: string;
+      readonly updated_at?: string;
+    }
+
     export interface PatchedMCPServerInstallationUpdate {
       display_name?: string;
       description?: string;
       is_enabled?: boolean;
+    }
+
+    export interface PatchedMCPServiceAccountUpdate {
+      /**
+         * Agent display name.
+         * @maxLength 200
+         */
+      name?: string;
+      /** What this agent does. */
+      description?: string;
+      /** active, or paused (all access off).
+       *
+       * * `active` - Active
+       * * `paused` - Paused */
+      status?: MCPServiceAccountStatusEnum;
     }
 
     export interface PatchedMaterializedColumnSlot {
@@ -56583,6 +57261,15 @@ export namespace Schemas {
       send_async?: boolean;
     }
 
+    export interface ServiceAccountAccessUpdate {
+      /** Gateway server to grant or revoke. */
+      gateway_server_id: string;
+      /** True grants access, false revokes it. */
+      enabled: boolean;
+      /** Optional agent-scope tool policies to set alongside the grant. */
+      policies?: ToolPolicyEntry[];
+    }
+
     export interface SessionGroupSummary {
       readonly id: string;
       /** Title of the group session summary */
@@ -62767,6 +63454,29 @@ export namespace Schemas {
       truncated: boolean;
       /** Maximum number of teams returned in `items`. */
       limit: number;
+    }
+
+    export const TeamMCPGatewayConfigMemberDefaultPreset = {...MCPPolicyPresetEnum,...BlankEnum,} as const
+    export const TeamMCPGatewayConfigAgentDefaultPreset = {...MCPPolicyPresetEnum,...BlankEnum,} as const
+    export interface TeamMCPGatewayConfig {
+      /** Whether non-admin members may register custom MCP servers with the gateway. */
+      allow_custom_servers?: boolean;
+      /** Baseline preset for members. Empty until an admin applies one from Team settings.
+       *
+       * * `allow` - Allow all
+       * * `user` - Member decides
+       * * `ask` - Ask for destructive
+       * * `block` - Block destructive */
+      member_default_preset?: typeof TeamMCPGatewayConfigMemberDefaultPreset[keyof typeof TeamMCPGatewayConfigMemberDefaultPreset];
+      /** Baseline preset deriving default policies for tools an agent has no explicit row for.
+       *
+       * * `allow` - Allow all
+       * * `user` - Member decides
+       * * `ask` - Ask for destructive
+       * * `block` - Block destructive */
+      agent_default_preset?: typeof TeamMCPGatewayConfigAgentDefaultPreset[keyof typeof TeamMCPGatewayConfigAgentDefaultPreset];
+      /** Whether the requesting user can administer the gateway (org admin or explicit project admin). */
+      readonly is_admin: boolean;
     }
 
     export interface TeamMergeTrendPoint {
@@ -69411,6 +70121,10 @@ export namespace Schemas {
     install_source?: EnvironmentsMcpServerInstallationsAuthorizeRetrieveInstallSource;
     installation_id?: string;
     posthog_code_callback_url?: string;
+    /**
+     * In-app path to land back on after the OAuth round-trip. Must be a same-app relative path.
+     */
+    return_path?: string;
     template_id?: string;
     };
 
@@ -77268,6 +77982,103 @@ export namespace Schemas {
     offset?: number;
     };
 
+    export type McpGatewayAuditListParams = {
+    /**
+     * Only calls made by this service account.
+     */
+    actor_service_account_id?: string;
+    /**
+     * Number of results to return per page.
+     */
+    limit?: number;
+    /**
+     * The initial index from which to return the results.
+     */
+    offset?: number;
+    /**
+     * all, agents (agent calls only), approvals (approved or pending), or blocked.
+     *
+     * * `all` - all
+     * * `agents` - agents
+     * * `approvals` - approvals
+     * * `blocked` - blocked
+     * @minLength 1
+     */
+    quick_filter?: McpGatewayAuditListQuickFilter;
+    };
+
+    export type McpGatewayAuditListQuickFilter = typeof McpGatewayAuditListQuickFilter[keyof typeof McpGatewayAuditListQuickFilter];
+
+
+    export const McpGatewayAuditListQuickFilter = {
+      All: 'all',
+      Agents: 'agents',
+      Approvals: 'approvals',
+      Blocked: 'blocked',
+    } as const;
+
+    export type McpGatewayRulesListParams = {
+    /**
+     * Number of results to return per page.
+     */
+    limit?: number;
+    /**
+     * The initial index from which to return the results.
+     */
+    offset?: number;
+    };
+
+    export type McpGatewayServersListParams = {
+    /**
+     * Number of results to return per page.
+     */
+    limit?: number;
+    /**
+     * The initial index from which to return the results.
+     */
+    offset?: number;
+    };
+
+    export type McpGatewayServersToolsRetrieveParams = {
+    /**
+     * Agent scope target. Required when scope_type is agent.
+     */
+    scope_service_account_id?: string;
+    /**
+     * Which scope to resolve: the team default, one member, or one agent.
+     *
+     * * `team` - Team default
+     * * `member` - Member
+     * * `agent` - Agent
+     * @minLength 1
+     */
+    scope_type?: McpGatewayServersToolsRetrieveScopeType;
+    /**
+     * Member scope target. Defaults to the requesting user.
+     */
+    scope_user_id?: number;
+    };
+
+    export type McpGatewayServersToolsRetrieveScopeType = typeof McpGatewayServersToolsRetrieveScopeType[keyof typeof McpGatewayServersToolsRetrieveScopeType];
+
+
+    export const McpGatewayServersToolsRetrieveScopeType = {
+      Team: 'team',
+      Member: 'member',
+      Agent: 'agent',
+    } as const;
+
+    export type McpGatewayServiceAccountsListParams = {
+    /**
+     * Number of results to return per page.
+     */
+    limit?: number;
+    /**
+     * The initial index from which to return the results.
+     */
+    offset?: number;
+    };
+
     export type McpServerInstallationsListParams = {
     /**
      * Number of results to return per page.
@@ -77288,6 +78099,10 @@ export namespace Schemas {
     install_source?: McpServerInstallationsAuthorizeRetrieveInstallSource;
     installation_id?: string;
     posthog_code_callback_url?: string;
+    /**
+     * In-app path to land back on after the OAuth round-trip. Must be a same-app relative path.
+     */
+    return_path?: string;
     template_id?: string;
     };
 
