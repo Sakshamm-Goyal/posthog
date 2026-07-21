@@ -41,7 +41,11 @@ const FORBIDDEN_PACKAGES = [
 // Ratchet policy: when an edge is cut, lower the budget to lock it in; raise it only as a
 // conscious, reviewed decision in the PR that needs it. There is headroom for churn, but any
 // reintroduced leak jumps the graph back toward ~100 MiB and fails loudly.
-const TOTAL_INPUT_BYTES_BUDGET = 14_436_000
+// The generated tailwind.css / compiled global.scss are graph inputs, so new utility
+// classes anywhere in the app nudge this total even when no module becomes reachable
+// (crossing edges unchanged). Raised for the product empty-state surfaces (~4.4 KB of
+// new utilities); keep raises small so real reachability leaks still fail loudly.
+const TOTAL_INPUT_BYTES_BUDGET = 14_448_000
 
 function fail(message) {
     console.error(`\n❌ ${message}`)
