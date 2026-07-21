@@ -239,6 +239,24 @@ describe('TeamManager()', () => {
         })
     })
 
+    describe('subscribeToReloads()', () => {
+        it('re-fetches a team on the next getTeam() call after a reload-team message', async () => {
+            teamManager.subscribeToReloads(hub.pubSub)
+
+            await teamManager.getTeam(teamId)
+            expect(fetchTeamsSpy).toHaveBeenCalledTimes(1)
+
+            // Publish the message the feature-flags staff API sends after updating this team's config,
+            // and wait for this process's own subscriber to receive it before asserting.
+            const received = new Promise<void>((resolve) => hub.pubSub.on('reload-team', () => resolve()))
+            await hub.pubSub.publish('reload-team', JSON.stringify({ teamId }))
+            await received
+
+            await teamManager.getTeam(teamId)
+            expect(fetchTeamsSpy).toHaveBeenCalledTimes(2)
+        })
+    })
+
     describe('hasAvailableFeature()', () => {
         it('returns false by default', async () => {
             await updateOrganizationAvailableFeatures(postgres, organizationId, [])

@@ -4,6 +4,7 @@ import { OrganizationAvailableFeature, ProjectId, Team } from '~/types'
 import { PostgresRouter, PostgresUse } from './db/postgres'
 import { LazyLoader, LoaderRetryOptions } from './lazy-loader'
 import { captureTeamEvent } from './posthog'
+import { PubSub } from './pubsub'
 
 type RawTeam = Omit<Team, 'available_features'> & {
     available_product_features: { key: string; name: string }[]
@@ -34,6 +35,17 @@ export class TeamManager {
             loader: async (teamIdOrTokens: string[]) => {
                 return await this.fetchTeams(teamIdOrTokens)
             },
+        })
+    }
+
+    /**
+     * Subscribes to cross-process team-config invalidation. Without this, a change made through
+     * e.g. the feature-flags staff API only reaches this process on the LazyLoader's ~2 minute
+     * background refresh. `pubSub` must already be started.
+     */
+    public subscribeToReloads(pubSub: PubSub): void {
+        pubSub.on<{ teamId: Team['id'] }>('reload-team', ({ teamId }) => {
+            this.lazyLoader.markForRefresh(String(teamId))
         })
     }
 

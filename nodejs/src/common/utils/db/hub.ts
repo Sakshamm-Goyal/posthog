@@ -64,6 +64,7 @@ export async function createHub(config: Partial<PluginsServerConfig> = {}): Prom
 
     const pubSub = new PubSub(redisPool)
     await pubSub.start()
+    teamManager.subscribeToReloads(pubSub)
 
     const personhogClient = createPersonHogClient(serverConfig)
     const clientLabel = serverConfig.PLUGIN_SERVER_MODE ?? 'unknown'

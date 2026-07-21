@@ -32,6 +32,11 @@ def reload_plugins_on_workers():
     publish_message("reload-plugins", "")
 
 
+def reload_team_on_workers(team_id: int):
+    logger.info(f"Reloading team {team_id} on workers")
+    publish_message("reload-team", {"teamId": team_id})
+
+
 def reload_action_on_workers(team_id: int, action_id: int):
     logger.info(f"Reloading action {action_id} on workers")
     publish_message("reload-action", {"teamId": team_id, "actionId": action_id})

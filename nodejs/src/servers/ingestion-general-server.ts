@@ -205,6 +205,7 @@ export class IngestionGeneralServer implements NodeServer {
 
         this.pubsub = new PubSub(this.redisPool)
         await this.pubsub.start()
+        teamManager.subscribeToReloads(this.pubsub)
 
         // 2. Ingestion + CDP shared services (geoip, repos, encryption)
         const geoipService = new GeoIPService(this.config.MMDB_FILE_LOCATION)

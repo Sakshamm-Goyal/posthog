@@ -78,6 +78,10 @@ class TestFeatureFlagsStaffTeamConfigAPI(APIBaseTest):
         with (
             patch("posthog.tasks.team_metadata.update_team_metadata_cache_task") as mock_metadata_task,
             patch("products.feature_flags.backend.tasks.update_team_flags_cache") as mock_flags_task,
+            patch(
+                "products.feature_flags.backend.models.team_feature_flags_config.reload_team_on_workers"
+            ) as mock_reload_team,
+            self.captureOnCommitCallbacks(execute=True),
         ):
             response = self.client.post(
                 SET_URL, {"team_id": self.team.id, "minimal_flag_called_events": new_value}, format="json"
@@ -93,6 +97,9 @@ class TestFeatureFlagsStaffTeamConfigAPI(APIBaseTest):
         # both caches are rebuilt.
         mock_metadata_task.delay.assert_called_once_with(self.team.id)
         mock_flags_task.delay.assert_called_once_with(self.team.id)
+        # Node's TeamManager cache otherwise only picks this up on its background refresh; the
+        # model's post_save signal (see test_team_feature_flags_config.py) publishes this on commit.
+        mock_reload_team.assert_called_once_with(self.team.id)
 
     def test_set_returns_404_for_unknown_team(self):
         missing_id = self.team.id + 9999

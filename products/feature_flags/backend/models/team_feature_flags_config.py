@@ -1,8 +1,11 @@
 import logging
 
-from django.db import models
+from django.db import models, transaction
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 from posthog.models.team.extensions import register_team_extension_signal
+from posthog.plugins.plugin_server_api import reload_team_on_workers
 
 logger = logging.getLogger(__name__)
 
@@ -32,3 +35,13 @@ class TeamFeatureFlagsConfig(models.Model):
 
 
 register_team_extension_signal(TeamFeatureFlagsConfig, logger=logger)
+
+
+@receiver(post_save, sender=TeamFeatureFlagsConfig)
+def team_feature_flags_config_saved(sender, instance: TeamFeatureFlagsConfig, created: bool, **kwargs) -> None:
+    # Skip the initial row creation (team-creation signal or get_or_create_team_extension): a
+    # fresh row always holds the same default the Node cache already assumes when no row exists,
+    # so there is nothing to invalidate.
+    if created:
+        return
+    transaction.on_commit(lambda: reload_team_on_workers(instance.team_id))

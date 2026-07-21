@@ -506,6 +506,7 @@ export class PluginServer implements NodeServer {
         await this.pubsub.start()
 
         const teamManager = new TeamManager(this.postgres)
+        teamManager.subscribeToReloads(this.pubsub)
 
         return { teamManager }
     }
