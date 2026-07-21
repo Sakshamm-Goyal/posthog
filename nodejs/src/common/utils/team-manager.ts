@@ -3,6 +3,7 @@ import { OrganizationAvailableFeature, ProjectId, Team } from '~/types'
 
 import { PostgresRouter, PostgresUse } from './db/postgres'
 import { LazyLoader, LoaderRetryOptions } from './lazy-loader'
+import { logger } from './logger'
 import { captureTeamEvent } from './posthog'
 import { PubSub } from './pubsub'
 
@@ -45,6 +46,7 @@ export class TeamManager {
      */
     public subscribeToReloads(pubSub: PubSub): void {
         pubSub.on<{ teamId: Team['id'] }>('reload-team', ({ teamId }) => {
+            logger.debug('⚡', '[PubSub] Reloading team!', { teamId })
             this.lazyLoader.markForRefresh(String(teamId))
         })
     }
