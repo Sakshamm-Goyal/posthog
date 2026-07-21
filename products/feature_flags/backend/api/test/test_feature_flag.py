@@ -5373,7 +5373,7 @@ class TestFeatureFlag(APIBaseTest, ClickhouseTestMixin):
             {
                 "type": "validation_error",
                 "code": "behavioral_cohort_found",
-                "detail": "Cohort 'cohort2' with filters on events cannot be used in feature flags.",
+                "detail": "Cohort 'cohort2' has an event-based condition on '$pageview' (performed_event_first_time) and cannot be used in feature flags.",
                 "attr": "filters",
             }.items(),
             cohort_request.json().items(),
@@ -5413,7 +5413,7 @@ class TestFeatureFlag(APIBaseTest, ClickhouseTestMixin):
             {
                 "type": "validation_error",
                 "code": "behavioral_cohort_found",
-                "detail": "Cohort 'cohort2' with filters on events cannot be used in feature flags.",
+                "detail": "Cohort 'cohort2' has an event-based condition on '$pageview' (performed_event_first_time) and cannot be used in feature flags.",
                 "attr": "filters",
             }.items(),
             response.json().items(),
@@ -5473,7 +5473,7 @@ class TestFeatureFlag(APIBaseTest, ClickhouseTestMixin):
             {
                 "type": "validation_error",
                 "code": "behavioral_cohort_found",
-                "detail": "Cohort 'realtime-behavioral-cohort' with filters on events cannot be used in feature flags.",
+                "detail": f"Cohort 'realtime-behavioral-cohort' has an event-based condition on '$pageview' ({behavioral_leaf['value']}) and cannot be used in feature flags.",
                 "attr": "filters",
             }.items(),
             response.json().items(),
@@ -5598,7 +5598,7 @@ class TestFeatureFlag(APIBaseTest, ClickhouseTestMixin):
             {
                 "type": "validation_error",
                 "code": "behavioral_cohort_found",
-                "detail": "Cohort 'cohort-behavioural' with filters on events cannot be used in feature flags.",
+                "detail": "Cohort 'cohort-behavioural' has an event-based condition on '$pageview' (performed_event_first_time) and cannot be used in feature flags.",
                 "attr": "filters",
             }.items(),
             cohort_request.json().items(),
@@ -5614,7 +5614,7 @@ class TestFeatureFlag(APIBaseTest, ClickhouseTestMixin):
             {
                 "type": "validation_error",
                 "code": "behavioral_cohort_found",
-                "detail": "Cohort 'cohort-behavioural' with filters on events cannot be used in feature flags.",
+                "detail": "Cohort 'cohort-behavioural' has an event-based condition on '$pageview' (performed_event_first_time) and cannot be used in feature flags.",
                 "attr": "filters",
             }.items(),
             cohort_request.json().items(),
