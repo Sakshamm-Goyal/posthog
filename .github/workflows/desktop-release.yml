@@ -1,0 +1,608 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Get app token
+        id: app-token
+        uses: getsentry/action-github-app-token@5c1e90706fe007857338ac1bfbd7a4177db2f789 # v4.0.0
+        with:
+          app_id: ${{ secrets.GH_APP_ARRAY_RELEASER_APP_ID }}
+          private_key: ${{ secrets.GH_APP_ARRAY_RELEASER_PRIVATE_KEY }}
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/desktop-v}"
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create draft release if absent
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Pre-create a single draft release so every parallel publish job uploads
+          # into the same release. Without this, parallel jobs each create-if-missing
+          # at once, producing multiple releases for one tag and scattering assets
+          # (the orphans get left as drafts).
+          if gh release view "v$APP_VERSION" --repo PostHog/code >/dev/null 2>&1; then
+            echo "Release v$APP_VERSION already exists — reusing it"
+          else
+            gh release create "v$APP_VERSION" --repo PostHog/code --draft \
+              --title "v$APP_VERSION" --notes "Release v$APP_VERSION (build in progress)"
+          fi
+
+  publish-macos:
+    needs: [prepare-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: desktop
+    permissions:
+      id-token: write
+      contents: write
+    env:
+      NODE_OPTIONS: "--max-old-space-size=8192"
+      NODE_ENV: production
+      npm_config_arch: ${{ matrix.arch }}
+      npm_config_platform: darwin
+      VITE_POSTHOG_API_KEY: ${{ secrets.VITE_POSTHOG_API_KEY }}
+      VITE_POSTHOG_API_HOST: ${{ secrets.VITE_POSTHOG_API_HOST }}
+      POSTHOG_SOURCEMAP_API_KEY: ${{ secrets.POSTHOG_SOURCEMAP_API_KEY }}
+      POSTHOG_ENV_ID: ${{ secrets.POSTHOG_ENV_ID }}
+      POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+      CSC_LINK: ${{ secrets.APPLE_CODESIGN_CERT_BASE64 }}
+      CSC_KEY_PASSWORD: ${{ secrets.APPLE_CODESIGN_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - name: Get app token
+        id: app-token
+        uses: getsentry/action-github-app-token@5c1e90706fe007857338ac1bfbd7a4177db2f789 # v4.0.0
+        with:
+          app_id: ${{ secrets.GH_APP_ARRAY_RELEASER_APP_ID }}
+          private_key: ${{ secrets.GH_APP_ARRAY_RELEASER_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          package_json_file: desktop/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: "pnpm"
+          cache-dependency-path: desktop/pnpm-lock.yaml
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/desktop-v}"
+          echo "Version: $TAG_VERSION"
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set version in package.json
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          jq --arg v "$APP_VERSION" '.version = $v' apps/code/package.json > tmp.json && mv tmp.json apps/code/package.json
+          echo "Set apps/code/package.json version to $APP_VERSION"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: ${{ secrets.AWS_TWIG_APP_ASSETS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_TWIG_APP_ASSETS_REGION }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+
+      - name: Download BerkeleyMono fonts from S3
+        run: aws s3 cp s3://${{ secrets.AWS_TWIG_APP_ASSETS_BUCKET }}/fonts/BerkeleyMono/ apps/code/assets/fonts/BerkeleyMono/ --recursive
+
+      - name: Build electron-trpc package
+        run: pnpm --filter @posthog/electron-trpc run build
+
+      - name: Build platform package
+        run: pnpm --filter @posthog/platform run build
+
+      - name: Build shared package
+        run: pnpm --filter @posthog/shared run build
+
+      - name: Build git package
+        run: pnpm --filter @posthog/git run build
+
+      - name: Build enricher package
+        run: pnpm --filter @posthog/enricher run build
+
+      - name: Build harness package
+        run: pnpm --filter @posthog/harness run build
+
+      - name: Build agent package
+        run: pnpm --filter @posthog/agent run build
+
+      # build/Assets.car is gitignored; regenerate it on the runner so the packaged
+      # app ships the liquid-glass icon (the script falls back to .icns if actool fails).
+      - name: Compile macOS liquid-glass icon
+        working-directory: desktop/apps/code
+        run: bash scripts/compile-glass-icon.sh
+
+      - name: Build release artifacts
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+        working-directory: desktop/apps/code
+        run: |
+          pnpm exec electron-vite build
+          if [[ "$MATRIX_ARCH" == "arm64" ]]; then
+            pnpm exec electron-builder build --mac --arm64 --publish never --config electron-builder.ts
+          else
+            pnpm exec electron-builder build --mac --x64 --publish never --config electron-builder.ts
+          fi
+
+      - name: Verify package
+        env:
+          MATRIX_ARCH: ${{ matrix.arch }}
+        run: |
+          if [[ "$MATRIX_ARCH" == "arm64" ]]; then
+            APP_BUNDLE="apps/code/out/mac-arm64/PostHog Code.app"
+          else
+            APP_BUNDLE="apps/code/out/mac/PostHog Code.app"
+          fi
+          RESOURCES="$APP_BUNDLE/Contents/Resources"
+          UNPACKED="$RESOURCES/app.asar.unpacked/node_modules"
+
+          if [[ ! -f "$RESOURCES/app-update.yml" ]]; then
+            echo "FAIL: app-update.yml missing at $RESOURCES/app-update.yml"
+            exit 1
+          fi
+          echo "OK: app-update.yml"
+
+          for mod in node-pty better-sqlite3 "@parcel/watcher"; do
+            if [[ ! -d "$UNPACKED/$mod" ]]; then
+              echo "FAIL: $mod missing in app.asar.unpacked/node_modules"
+              exit 1
+            fi
+            echo "OK: $mod"
+          done
+
+          for bin in claude-cli codex-acp; do
+            if [[ ! -d "$RESOURCES/app.asar.unpacked/.vite/build/$bin" ]]; then
+              echo "FAIL: $bin missing in bundled binaries"
+              exit 1
+            fi
+            echo "OK: $bin"
+          done
+
+          # The native codex CLI must ship as a sibling of codex-acp, or the
+          # app-server harness silently falls back to codex-acp in production.
+          for f in codex rg; do
+            if [[ ! -f "$RESOURCES/app.asar.unpacked/.vite/build/codex-acp/$f" ]]; then
+              echo "FAIL: codex-acp/$f missing in bundled binaries"
+              exit 1
+            fi
+            echo "OK: codex-acp/$f"
+          done
+
+      - name: Install Playwright
+        run: pnpm --filter code exec playwright install
+
+      - name: Smoke test packaged app
+        env:
+          CI: true
+          E2E_APP_ARCH: ${{ matrix.arch }}
+        run: pnpm --filter code exec playwright test --config=tests/e2e/playwright.config.ts tests/e2e/tests/smoke.spec.ts
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: release-playwright-report-macos-${{ matrix.arch }}
+          path: desktop/apps/code/playwright-report/
+          retention-days: 7
+
+      - name: Upload release artifacts
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release upload "v$APP_VERSION" --repo PostHog/code --clobber \
+            apps/code/out/*.dmg \
+            apps/code/out/*-mac.zip \
+            apps/code/out/*.blockmap
+
+      # Hash the same files uploaded above; finalize-release turns these into
+      # the download tables in the release notes.
+      - name: Compute artifact checksums
+        env:
+          MATRIX_ARCH: ${{ matrix.arch }}
+        working-directory: desktop/apps/code/out
+        run: shasum -a 256 *.dmg *-mac.zip *.blockmap > "checksums-macos-$MATRIX_ARCH.txt"
+
+      - name: Upload checksums artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: checksums-macos-${{ matrix.arch }}
+          path: desktop/apps/code/out/checksums-macos-${{ matrix.arch }}.txt
+          retention-days: 1
+
+      - name: Upload mac manifest artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mac-manifest-${{ matrix.arch }}
+          path: desktop/apps/code/out/latest-mac.yml
+          retention-days: 1
+
+  publish-windows:
+    needs: [prepare-release]
+    runs-on: windows-2022
+    defaults:
+      run:
+        working-directory: desktop
+    permissions:
+      id-token: write
+      contents: write
+    env:
+      NODE_OPTIONS: "--max-old-space-size=8192"
+      NODE_ENV: production
+      VITE_POSTHOG_API_KEY: ${{ secrets.VITE_POSTHOG_API_KEY }}
+      VITE_POSTHOG_API_HOST: ${{ secrets.VITE_POSTHOG_API_HOST }}
+      POSTHOG_SOURCEMAP_API_KEY: ${{ secrets.POSTHOG_SOURCEMAP_API_KEY }}
+      POSTHOG_ENV_ID: ${{ secrets.POSTHOG_ENV_ID }}
+      POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+    steps:
+      - name: Get app token
+        id: app-token
+        uses: getsentry/action-github-app-token@5c1e90706fe007857338ac1bfbd7a4177db2f789 # v4.0.0
+        with:
+          app_id: ${{ secrets.GH_APP_ARRAY_RELEASER_APP_ID }}
+          private_key: ${{ secrets.GH_APP_ARRAY_RELEASER_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          package_json_file: desktop/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: "pnpm"
+          cache-dependency-path: desktop/pnpm-lock.yaml
+
+      - name: Extract version from tag
+        id: version
+        shell: pwsh
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          $tagVersion = "$env:GITHUB_REF" -replace "refs/tags/desktop-v", ""
+          echo "Version: $tagVersion"
+          echo "version=$tagVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Set version in package.json
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $pkg = Get-Content apps/code/package.json -Raw | ConvertFrom-Json
+          $pkg.version = "$env:APP_VERSION"
+          $pkg | ConvertTo-Json -Depth 10 | Set-Content apps/code/package.json
+          echo "Set apps/code/package.json version to $env:APP_VERSION"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build electron-trpc package
+        run: pnpm --filter @posthog/electron-trpc run build
+
+      - name: Build platform package
+        run: pnpm --filter @posthog/platform run build
+
+      - name: Build shared package
+        run: pnpm --filter @posthog/shared run build
+
+      - name: Build git package
+        run: pnpm --filter @posthog/git run build
+
+      - name: Build enricher package
+        run: pnpm --filter @posthog/enricher run build
+
+      - name: Build harness package
+        run: pnpm --filter @posthog/harness run build
+
+      - name: Build agent package
+        run: pnpm --filter @posthog/agent run build
+
+      - name: Build release artifacts
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        working-directory: desktop/apps/code
+        run: |
+          pnpm exec electron-vite build
+          pnpm exec electron-builder build --win --x64 --publish never --config electron-builder.ts
+
+      - name: Upload release artifacts
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $out = "apps/code/out"
+          $items = @()
+          # NSIS installer + electron-updater metadata live in the output root.
+          $items += Get-ChildItem $out -File -Filter "*.exe"
+          $items += Get-ChildItem $out -File -Filter "latest.yml"
+          $items += Get-ChildItem $out -File -Filter "*.blockmap"
+          $files = $items | Select-Object -ExpandProperty FullName
+          gh release upload "v$env:APP_VERSION" --repo PostHog/code --clobber @files
+
+      # Hash the same files uploaded above (minus latest.yml); finalize-release
+      # turns these into the download tables in the release notes.
+      - name: Compute artifact checksums
+        shell: bash
+        working-directory: desktop/apps/code/out
+        run: sha256sum *.exe *.blockmap > checksums-windows-x64.txt
+
+      - name: Upload checksums artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: checksums-windows-x64
+          path: desktop/apps/code/out/checksums-windows-x64.txt
+          retention-days: 1
+
+  publish-linux:
+    needs: [prepare-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: desktop
+    permissions:
+      id-token: write
+      contents: write
+    env:
+      NODE_OPTIONS: "--max-old-space-size=8192"
+      NODE_ENV: production
+      VITE_POSTHOG_API_KEY: ${{ secrets.VITE_POSTHOG_API_KEY }}
+      VITE_POSTHOG_API_HOST: ${{ secrets.VITE_POSTHOG_API_HOST }}
+      POSTHOG_SOURCEMAP_API_KEY: ${{ secrets.POSTHOG_SOURCEMAP_API_KEY }}
+      POSTHOG_ENV_ID: ${{ secrets.POSTHOG_ENV_ID }}
+      POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+    steps:
+      - name: Get app token
+        id: app-token
+        uses: getsentry/action-github-app-token@5c1e90706fe007857338ac1bfbd7a4177db2f789 # v4.0.0
+        with:
+          app_id: ${{ secrets.GH_APP_ARRAY_RELEASER_APP_ID }}
+          private_key: ${{ secrets.GH_APP_ARRAY_RELEASER_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+
+      - name: Install Linux packaging tooling
+        # squashfs-tools/zsync/libfuse2t64: AppImage. fakeroot: maker-deb.
+        # rpm: maker-rpm (provides rpmbuild).
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            squashfs-tools zsync libfuse2t64 fakeroot rpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          package_json_file: desktop/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: "pnpm"
+          cache-dependency-path: desktop/pnpm-lock.yaml
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/desktop-v}"
+          echo "Version: $TAG_VERSION"
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set version in package.json
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          jq --arg v "$APP_VERSION" '.version = $v' apps/code/package.json > tmp.json && mv tmp.json apps/code/package.json
+          echo "Set apps/code/package.json version to $APP_VERSION"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build electron-trpc package
+        run: pnpm --filter @posthog/electron-trpc run build
+
+      - name: Build platform package
+        run: pnpm --filter @posthog/platform run build
+
+      - name: Build shared package
+        run: pnpm --filter @posthog/shared run build
+
+      - name: Build git package
+        run: pnpm --filter @posthog/git run build
+
+      - name: Build enricher package
+        run: pnpm --filter @posthog/enricher run build
+
+      - name: Build harness package
+        run: pnpm --filter @posthog/harness run build
+
+      - name: Build agent package
+        run: pnpm --filter @posthog/agent run build
+
+      - name: Build release artifacts
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          MATRIX_ARCH: ${{ matrix.arch }}
+        working-directory: desktop/apps/code
+        run: |
+          pnpm exec electron-vite build
+          if [[ "$MATRIX_ARCH" == "arm64" ]]; then
+            pnpm exec electron-builder build --linux --arm64 --publish never --config electron-builder.ts
+          else
+            pnpm exec electron-builder build --linux --x64 --publish never --config electron-builder.ts
+          fi
+
+      - name: Upload release artifacts
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release upload "v$APP_VERSION" --repo PostHog/code --clobber \
+            apps/code/out/*.AppImage \
+            apps/code/out/*.deb \
+            apps/code/out/*.rpm
+
+      # Hash the same files uploaded above; finalize-release turns these into
+      # the download tables in the release notes.
+      - name: Compute artifact checksums
+        env:
+          MATRIX_ARCH: ${{ matrix.arch }}
+        working-directory: desktop/apps/code/out
+        run: sha256sum *.AppImage *.deb *.rpm > "checksums-linux-$MATRIX_ARCH.txt"
+
+      - name: Upload checksums artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: checksums-linux-${{ matrix.arch }}
+          path: desktop/apps/code/out/checksums-linux-${{ matrix.arch }}.txt
+          retention-days: 1
+
+  finalize-release:
+    needs: [publish-macos, publish-windows, publish-linux]
+    # Publish only when every platform built successfully. Without an `if:` override
+    # the default `needs` gate skips this job (leaving the GitHub release a draft) if
+    # any of the macOS, Windows or Linux publish jobs fails.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Get app token
+        id: app-token
+        uses: getsentry/action-github-app-token@5c1e90706fe007857338ac1bfbd7a4177db2f789 # v4.0.0
+        with:
+          app_id: ${{ secrets.GH_APP_ARRAY_RELEASER_APP_ID }}
+          private_key: ${{ secrets.GH_APP_ARRAY_RELEASER_PRIVATE_KEY }}
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/desktop-v}"
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout merge script
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: |
+            desktop/apps/code/scripts/merge-mac-manifests.mjs
+            desktop/apps/code/scripts/generate-release-download-tables.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install yaml dependency
+        run: npm install --prefix desktop/apps/code yaml@^2
+
+      - name: Download arm64 mac manifest
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: mac-manifest-arm64
+          path: /tmp/mac-manifests/arm64
+
+      - name: Download x64 mac manifest
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: mac-manifest-x64
+          path: /tmp/mac-manifests/x64
+
+      - name: Merge mac manifests
+        run: |
+          node desktop/apps/code/scripts/merge-mac-manifests.mjs \
+            /tmp/mac-manifests/arm64/latest-mac.yml \
+            /tmp/mac-manifests/x64/latest-mac.yml \
+            /tmp/latest-mac.yml
+
+      - name: Upload merged mac manifest
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release upload "v$APP_VERSION" --repo PostHog/code --clobber /tmp/latest-mac.yml
+
+      - name: Download checksum artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: checksums-*
+          merge-multiple: true
+          path: /tmp/checksums
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh api repos/PostHog/code/releases/generate-notes -f tag_name="v$APP_VERSION" --jq '.body' > /tmp/release-notes.md
+          printf '\n' >> /tmp/release-notes.md
+          node desktop/apps/code/scripts/generate-release-download-tables.mjs "$APP_VERSION" /tmp/checksums >> /tmp/release-notes.md
+          gh release edit "v$APP_VERSION" --repo PostHog/code --draft=false --notes-file /tmp/release-notes.md

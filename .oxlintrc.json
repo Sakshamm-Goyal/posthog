@@ -9,6 +9,7 @@
         "dist",
         "build",
         "rust",
+        "desktop",
         "cli",
         "nodejs",
         ".semgrep",
